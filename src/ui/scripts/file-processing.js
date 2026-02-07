@@ -1,41 +1,75 @@
-import DOMElements from './dom-elements.js';
-import { setCurrentFile } from './state.js';
-import { formatFileSize, createWaveformVisualization, showError } from './ui-utils.js';
-import Bridge from './bridge.js';
+import DOMElements from './dom-elements.js'
+import { setCurrentFile, setCurrentFileData } from './state.js'
+import { createWaveformVisualization, formatFileSize, showError } from './ui-utils.js'
+import Bridge from './bridge.js'
+
+const AUDIO_EXTENSIONS = new Set(['.mp3', '.wav', '.m4a', '.ogg', '.flac', '.aac', '.webm'])
+const VIDEO_EXTENSIONS = new Set(['.mp4'])
+
+function getFileExtension(fileName) {
+  const lastDotIndex = fileName.lastIndexOf('.')
+  if (lastDotIndex === -1) {
+    return ''
+  }
+
+  return fileName.slice(lastDotIndex).toLowerCase()
+}
+
+export function isSupportedInputFile(file) {
+  const mimeType = (file.type || '').toLowerCase()
+  const extension = getFileExtension(file.name || '')
+
+  if (mimeType.startsWith('audio/')) {
+    return true
+  }
+  if (mimeType === 'video/mp4') {
+    return true
+  }
+  if (AUDIO_EXTENSIONS.has(extension)) {
+    return true
+  }
+  if (VIDEO_EXTENSIONS.has(extension)) {
+    return true
+  }
+
+  return false
+}
 
 /**
  * Process a file after it's been selected or dropped
  * @param {File} file - The file to process
  */
 export async function processFile(file) {
-  // Check if it's an audio file
-  if (!file.type.startsWith('audio/')) {
-    showError('Please select an audio file.');
-    return;
+  if (!isSupportedInputFile(file)) {
+    showError('Please select an audio file or an MP4 video file.')
+    return
   }
 
   try {
-    // Upload file to server
-    const result = await Bridge.uploadFile(file);
+    const result = await Bridge.uploadFile(file)
 
-    if (result.success) {
-      setCurrentFile(result.filePath);
-
-      // Update UI
-      DOMElements.fileNameElement.textContent = file.name;
-      DOMElements.fileSizeElement.textContent = formatFileSize(file.size);
-      DOMElements.filePreview.style.display = 'block';
-
-      // Create waveform visualization
-      createWaveformVisualization(DOMElements.waveformContainer);
-
-      // Enable transcribe button
-      DOMElements.transcribeButton.disabled = false;
-    } else {
-      showError(`Failed to upload file: ${result.error}`);
+    if (!result.success) {
+      showError(`Failed to upload file: ${result.error}`)
+      return
     }
+
+    setCurrentFile(result.filePath)
+    setCurrentFileData({
+      originalName: result.originalName || file.name,
+      mimeType: result.mimeType || file.type || '',
+    })
+
+    DOMElements.fileNameElement.textContent = file.name
+    DOMElements.fileSizeElement.textContent = formatFileSize(file.size)
+    DOMElements.filePreview.classList.remove('hidden')
+
+    createWaveformVisualization(DOMElements.waveformContainer)
+
+    DOMElements.transcribeButton.disabled = false
+    DOMElements.progressMessageElement.textContent = 'Ready to transcribe.'
   } catch (error) {
-    showError(`Error processing file: ${error.message}`);
+    const errorMessage = error instanceof Error ? error.message : String(error)
+    showError(`Error processing file: ${errorMessage}`)
   }
 }
 
@@ -44,13 +78,10 @@ export async function processFile(file) {
  * @param {Event} event - The change event
  */
 export async function handleFiles(event) {
-  const files = event.target.files;
-  if (files.length > 0) {
-    try {
-      await processFile(files[0]);
-    } catch (error) {
-      showError(`Error processing file: ${error.message}`);
-    }
+  const input = /** @type {HTMLInputElement} */ (event.target)
+  const files = input.files
+  if (files && files.length > 0) {
+    await processFile(files[0])
   }
 }
 
@@ -59,37 +90,31 @@ export async function handleFiles(event) {
  * @param {DragEvent} event - The drop event
  */
 export async function handleDrop(event) {
-  const dt = event.dataTransfer;
-  const files = dt.files;
+  const dt = event.dataTransfer
+  if (!dt || dt.files.length === 0) return
 
-  if (files.length > 0) {
-    try {
-      await processFile(files[0]);
-    } catch (error) {
-      showError(`Error processing file: ${error.message}`);
-    }
-  }
+  await processFile(dt.files[0])
 }
 
 /**
  * Prevent default behavior for drag and drop events
- * @param {Event} e - The event
+ * @param {Event} event - The event
  */
-export function preventDefaults(e) {
-  e.preventDefault();
-  e.stopPropagation();
+export function preventDefaults(event) {
+  event.preventDefault()
+  event.stopPropagation()
 }
 
 /**
  * Highlight drop area when dragging over
  */
 export function highlight() {
-  DOMElements.dropArea.classList.add('active');
+  DOMElements.dropArea.classList.add('active')
 }
 
 /**
  * Remove highlight from drop area
  */
 export function unhighlight() {
-  DOMElements.dropArea.classList.remove('active');
+  DOMElements.dropArea.classList.remove('active')
 }

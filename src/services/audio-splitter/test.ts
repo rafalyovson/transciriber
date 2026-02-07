@@ -1,85 +1,77 @@
-import { assertEquals, assertExists } from 'https://deno.land/std@0.220.1/assert/mod.ts'
+import { assertEquals } from '@std/assert'
+import { ensureDir } from '@std/fs/ensure-dir'
+import { join } from '@std/path'
 import { AudioSplitterService } from './index.ts'
-import { ensureDir } from 'https://deno.land/std@0.220.1/fs/ensure_dir.ts'
-import { join } from 'https://deno.land/std@0.220.1/path/mod.ts'
 
-// Mock Deno.Command to avoid actual FFmpeg execution during tests
 const originalCommand = Deno.Command
-const mockCommandOutput = {
-  code: 0,
-  stdout: new Uint8Array(),
-  stderr: new Uint8Array(),
-}
 
-// Test suite for AudioSplitterService
-Deno.test('AudioSplitterService', async (t) => {
-  // Setup test environment
-  const testDir = join(Deno.cwd(), 'test-output')
+Deno.test('AudioSplitterService uses re-encode segmentation and parses timing manifest', async () => {
+  const testDir = join(Deno.cwd(), 'test-audio-splitter')
   await ensureDir(testDir)
 
-  // Create a test audio file
-  const testAudioPath = join(testDir, 'test.mp3')
+  const inputPath = join(testDir, 'input.wav')
+  await Deno.writeFile(inputPath, new Uint8Array([0, 1, 2, 3]))
+
+  const capturedCalls: Array<{ command: string; args: string[] }> = []
+
+  Deno.Command = function (command: string, options?: Deno.CommandOptions) {
+    capturedCalls.push({ command, args: [...(options?.args || [])] })
+
+    return {
+      output: async () => {
+        const args = options?.args || []
+        const segmentListIndex = args.findIndex((arg) => arg === '-segment_list')
+        const segmentListPath = segmentListIndex >= 0 ? String(args[segmentListIndex + 1]) : ''
+
+        if (segmentListPath) {
+          const chunkPathA = join(testDir, 'chunk_00000.wav')
+          const chunkPathB = join(testDir, 'chunk_00001.wav')
+          await Deno.writeFile(chunkPathA, new Uint8Array([1]))
+          await Deno.writeFile(chunkPathB, new Uint8Array([2]))
+          await Deno.writeTextFile(
+            segmentListPath,
+            `${chunkPathA},0.000000,30.000000\n${chunkPathB},30.000000,61.250000\n`,
+          )
+        }
+
+        return {
+          code: 0,
+          stdout: new Uint8Array(),
+          stderr: new Uint8Array(),
+        }
+      },
+    } as unknown as Deno.Command
+  } as unknown as typeof Deno.Command
+
   try {
-    await Deno.writeFile(testAudioPath, new Uint8Array([0, 1, 2, 3]))
-  } catch (e) {
-    console.error('Error creating test file:', e)
-  }
+    const service = new AudioSplitterService()
+    const result = await service.splitAudio({
+      inputFile: inputPath,
+      outputDir: testDir,
+      segmentDuration: 30,
+      filePrefix: 'chunk',
+    })
 
-  // Mock file listing for readDir
-  const mockEntries = [
-    { name: 'chunk_000.mp3', isFile: true, isDirectory: false, isSymlink: false },
-    { name: 'chunk_001.mp3', isFile: true, isDirectory: false, isSymlink: false },
-  ]
+    assertEquals(result.ok, true)
+    if (!result.ok) return
 
-  await t.step('splitAudio returns correct result with mocked FFmpeg', async () => {
-    // Mock Deno.Command
-    Deno.Command = function () {
-      return {
-        output: () => mockCommandOutput,
-      } as unknown as Deno.Command
-    } as unknown as typeof Deno.Command
+    assertEquals(result.data.length, 2)
+    assertEquals(result.data[0].index, 0)
+    assertEquals(result.data[0].durationSec, 30)
+    assertEquals(result.data[1].index, 1)
+    assertEquals(result.data[1].durationSec, 31.25)
 
-    // Mock Deno.readDir
-    const originalReadDir = Deno.readDir
-    Deno.readDir = () => {
-      return {
-        [Symbol.asyncIterator]() {
-          let index = 0
-          return {
-            next() {
-              if (index < mockEntries.length) {
-                return { value: mockEntries[index++], done: false }
-              }
-              return { value: undefined, done: true }
-            },
-          }
-        },
-      } as unknown as AsyncIterable<Deno.DirEntry>
-    }
-
-    try {
-      const service = new AudioSplitterService()
-      const result = await service.splitAudio({
-        inputFile: testAudioPath,
-        outputDir: testDir,
-        segmentDuration: 30,
-      })
-
-      assertEquals(result.ok, true)
-      assertExists(result.ok && result.data)
-      assertEquals(result.ok && result.data.length, 2)
-    } finally {
-      // Restore original functions
-      Deno.Command = originalCommand
-      Deno.readDir = originalReadDir
-    }
-  })
-
-  // Cleanup
-  try {
-    await Deno.remove(testAudioPath)
+    assertEquals(capturedCalls.length, 1)
+    assertEquals(capturedCalls[0].command, 'ffmpeg')
+    assertEquals(capturedCalls[0].args.includes('-c:a'), true)
+    assertEquals(capturedCalls[0].args.includes('pcm_s16le'), true)
+    assertEquals(capturedCalls[0].args.includes('-segment_list'), true)
+    assertEquals(capturedCalls[0].args.includes('-segment_list_type'), true)
+    assertEquals(capturedCalls[0].args.includes('csv'), true)
+    assertEquals(capturedCalls[0].args.includes('-c'), false)
+    assertEquals(capturedCalls[0].args.includes('copy'), false)
+  } finally {
+    Deno.Command = originalCommand
     await Deno.remove(testDir, { recursive: true })
-  } catch (e) {
-    console.error('Error cleaning up test files:', e)
   }
 })

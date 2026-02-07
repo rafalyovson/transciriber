@@ -6,7 +6,7 @@ export function getChunkDuration(): number {
   if (!envDuration) return 30 // Default to 30 seconds
 
   const duration = parseInt(envDuration, 10)
-  return isNaN(duration) ? 30 : duration
+  return isNaN(duration) || duration <= 0 ? 30 : duration
 }
 
 /**
@@ -42,12 +42,12 @@ export function getLanguageCode(): string {
  * Following Deno best practices for environment variable handling
  */
 export function setupEnv(): boolean {
-  // Verify the API key is set
+  // API key can come from environment or from the UI settings.
   const apiKey = Deno.env.get('ELEVENLABS_API_KEY')
   if (!apiKey) {
-    console.error('Error: ELEVENLABS_API_KEY not found in environment variables')
-    console.error('Make sure to run with --env-file=.env flag or set the variable manually')
-    return false
+    console.warn(
+      'ELEVENLABS_API_KEY not found in environment variables. The UI/API can still provide it at runtime.',
+    )
   }
 
   // Log configured directories

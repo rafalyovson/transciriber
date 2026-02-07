@@ -1,7 +1,7 @@
-import { assertEquals } from 'https://deno.land/std@0.220.1/assert/mod.ts'
+import { assertEquals } from '@std/assert'
 import { FileService } from './index.ts'
-import { ensureDir } from 'https://deno.land/std@0.220.1/fs/ensure_dir.ts'
-import { join } from 'https://deno.land/std@0.220.1/path/mod.ts'
+import { ensureDir } from '@std/fs/ensure-dir'
+import { join } from '@std/path'
 
 // Test suite for FileService
 Deno.test('FileService', async (t) => {
@@ -82,6 +82,37 @@ Deno.test('FileService', async (t) => {
       'This is chunk one. This is chunk two. This is chunk three.',
       'Should combine chunks with spaces',
     )
+  })
+
+  await t.step('saveSubtitle writes subtitle sidecar files', async () => {
+    const srtPath = await fileService.saveSubtitle(
+      '1\n00:00:00,000 --> 00:00:01,000\nHello\n',
+      'video.mp4',
+      'srt',
+    )
+    const vttPath = await fileService.saveSubtitle(
+      'WEBVTT\n\n00:00:00.000 --> 00:00:01.000\nHello\n',
+      'video.mp4',
+      'vtt',
+    )
+
+    const srtContent = await Deno.readTextFile(srtPath)
+    const vttContent = await Deno.readTextFile(vttPath)
+
+    assertEquals(srtContent.includes('00:00:00,000'), true)
+    assertEquals(vttContent.startsWith('WEBVTT'), true)
+  })
+
+  await t.step('saveSubtitleQualityReport writes diagnostics json', async () => {
+    const reportPath = await fileService.saveSubtitleQualityReport({
+      status: 'review_required',
+      metrics: { cueCount: 2 },
+      violations: ['Cue 2 exceeds max chars per line'],
+    }, 'video.mp4')
+
+    const content = await Deno.readTextFile(reportPath)
+    assertEquals(content.includes('"status": "review_required"'), true)
+    assertEquals(content.includes('"cueCount": 2'), true)
   })
 
   // Cleanup

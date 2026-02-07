@@ -1,98 +1,132 @@
-import DOMElements from './dom-elements.js';
-import { handleDrop, handleFiles, highlight, preventDefaults, unhighlight } from './file-processing.js';
-import { transcribeAudio, updateLanguageDisplay } from './transcription.js';
-import { saveSettings } from './settings.js';
-import { exportTranscription, copyTranscription } from './export.js';
-import { resetState } from './state.js';
-import { hideMessages } from './ui-utils.js';
+import DOMElements from './dom-elements.js'
+import {
+  handleDrop,
+  handleFiles,
+  highlight,
+  preventDefaults,
+  unhighlight,
+} from './file-processing.js'
+import {
+  transcribeAudio,
+  updateChunkDuration,
+  updateLanguageDisplay,
+  updateModeSelection,
+} from './transcription.js'
+import { saveSettings } from './settings.js'
+import { copyTranscription, exportTranscription } from './export.js'
+import { resetState, setOutputFolder } from './state.js'
+import { hideMessages, showError } from './ui-utils.js'
+import Bridge from './bridge.js'
+
+async function chooseOutputFolder() {
+  const selection = await Bridge.selectOutputFolder()
+
+  if (!selection.success || !selection.folder) {
+    if (selection.error && selection.error !== 'No folder selected') {
+      showError(`Output folder selection failed: ${selection.error}`)
+    }
+    return
+  }
+
+  const updateResult = await Bridge.setOutputFolder(selection.folder)
+  if (!updateResult.success) {
+    showError(`Failed to set output folder: ${updateResult.error || 'Unknown error'}`)
+    return
+  }
+
+  setOutputFolder(selection.folder)
+  DOMElements.outputFolderPath.textContent = selection.folder
+}
 
 /**
  * Set up all event listeners
  */
 export function setupEventListeners() {
-  console.log('Setting up event listeners...');
+  ;['dragenter', 'dragover', 'dragleave', 'drop'].forEach((eventName) => {
+    DOMElements.dropArea.addEventListener(eventName, preventDefaults, false)
+  })
 
-  // File Drop Area
-  ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
-    DOMElements.dropArea.addEventListener(eventName, preventDefaults, false);
-  });
+  ;['dragenter', 'dragover'].forEach((eventName) => {
+    DOMElements.dropArea.addEventListener(eventName, highlight, false)
+  })
 
-  ['dragenter', 'dragover'].forEach(eventName => {
-    DOMElements.dropArea.addEventListener(eventName, highlight, false);
-  });
+  ;['dragleave', 'drop'].forEach((eventName) => {
+    DOMElements.dropArea.addEventListener(eventName, unhighlight, false)
+  })
 
-  ['dragleave', 'drop'].forEach(eventName => {
-    DOMElements.dropArea.addEventListener(eventName, unhighlight, false);
-  });
+  DOMElements.dropArea.addEventListener('drop', handleDrop, false)
+  DOMElements.fileInput.addEventListener('change', handleFiles)
 
-  DOMElements.dropArea.addEventListener('drop', handleDrop, false);
-
-  // File Input
-  DOMElements.fileInput.addEventListener('change', handleFiles);
-
-  // Browse Button
   DOMElements.browseButton.addEventListener('click', () => {
-    DOMElements.fileInput.click();
-  });
+    DOMElements.fileInput.click()
+  })
 
-  // Language selection
-  DOMElements.languageSelect.addEventListener('change', updateLanguageDisplay);
+  DOMElements.languageSelect.addEventListener('change', updateLanguageDisplay)
+  DOMElements.modeWholeRadio.addEventListener('change', updateModeSelection)
+  DOMElements.modePartsRadio.addEventListener('change', updateModeSelection)
+  DOMElements.chunkDurationInput.addEventListener('change', updateChunkDuration)
 
-  // Transcribe Button
-  DOMElements.transcribeButton.addEventListener('click', transcribeAudio);
+  DOMElements.selectOutputFolderButton.addEventListener('click', async () => {
+    await chooseOutputFolder()
+  })
 
-  // Settings Modal
+  DOMElements.transcribeButton.addEventListener('click', transcribeAudio)
+
   DOMElements.settingsButton.addEventListener('click', () => {
-    DOMElements.settingsModal.style.display = 'block';
-  });
+    DOMElements.settingsModal.classList.add('show')
+  })
 
   DOMElements.closeModalButton.addEventListener('click', () => {
-    DOMElements.settingsModal.style.display = 'none';
-  });
+    DOMElements.settingsModal.classList.remove('show')
+  })
 
-  DOMElements.saveSettingsButton.addEventListener('click', saveSettings);
-
-  // Export Options
-  DOMElements.exportButton.addEventListener('click', () => {
-    DOMElements.exportOptions.classList.toggle('show');
-  });
-
-  document.addEventListener('click', (e) => {
-    if (!DOMElements.exportButton.contains(e.target) && !DOMElements.exportOptions.contains(e.target)) {
-      DOMElements.exportOptions.classList.remove('show');
+  DOMElements.settingsModal.addEventListener('click', (event) => {
+    if (event.target === DOMElements.settingsModal) {
+      DOMElements.settingsModal.classList.remove('show')
     }
-  });
+  })
 
-  // Export Actions
-  document.getElementById('export-txt').addEventListener('click', () => exportTranscription('txt'));
-  document.getElementById('export-srt').addEventListener('click', () => exportTranscription('srt'));
-  document.getElementById('export-vtt').addEventListener('click', () => exportTranscription('vtt'));
+  DOMElements.saveSettingsButton.addEventListener('click', saveSettings)
 
-  // Copy Button
-  DOMElements.copyButton.addEventListener('click', copyTranscription);
+  DOMElements.exportButton.addEventListener('click', () => {
+    DOMElements.exportOptions.classList.toggle('show')
+  })
 
-  // Clear Button
-  DOMElements.clearButton.addEventListener('click', clearTranscription);
+  document.addEventListener('click', (event) => {
+    const target = event.target
+    if (!(target instanceof Node)) {
+      return
+    }
 
-  console.log('Event listeners set up successfully');
+    if (!DOMElements.exportButton.contains(target) && !DOMElements.exportOptions.contains(target)) {
+      DOMElements.exportOptions.classList.remove('show')
+    }
+  })
+
+  document.getElementById('export-txt').addEventListener('click', () => exportTranscription('txt'))
+  document.getElementById('export-srt').addEventListener('click', () => exportTranscription('srt'))
+  document.getElementById('export-vtt').addEventListener('click', () => exportTranscription('vtt'))
+
+  DOMElements.copyButton.addEventListener('click', copyTranscription)
+  DOMElements.clearButton.addEventListener('click', clearTranscription)
 }
 
 /**
- * Clear the transcription and reset the UI
+ * Clear transcription and reset UI
  */
 export function clearTranscription() {
-  // Reset state
-  resetState();
+  resetState()
 
-  // Clear UI
-  DOMElements.fileInput.value = '';
-  DOMElements.filePreview.style.display = 'none';
-  DOMElements.outputSection.style.display = 'none';
-  DOMElements.transcriptionContent.textContent = '';
+  DOMElements.fileInput.value = ''
+  DOMElements.filePreview.classList.add('hidden')
+  DOMElements.outputSection.classList.add('hidden')
+  DOMElements.transcriptionContent.textContent = ''
+  DOMElements.progressMessageElement.textContent = 'Waiting for a media file.'
+  DOMElements.progressStageElement.textContent = 'Queued...'
+  DOMElements.progressBarElement.style.width = '0%'
+  DOMElements.progressPercentElement.textContent = '0%'
 
-  // Hide messages
-  hideMessages();
+  hideMessages()
 
-  // Disable transcribe button
-  DOMElements.transcribeButton.disabled = true;
+  DOMElements.transcribeButton.disabled = true
 }

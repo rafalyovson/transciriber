@@ -2,12 +2,10 @@
  * DOM Elements Module
  *
  * Centralizes all DOM element references used throughout the application.
- * Exports a single object containing all elements for cleaner imports.
  */
 
-// Create a DOMElements object with all element references
 const DOMElements = {
-  // File handling elements
+  // File handling
   dropArea: document.getElementById('drop-area'),
   fileInput: document.getElementById('file-input'),
   filePreview: document.getElementById('file-preview'),
@@ -16,12 +14,26 @@ const DOMElements = {
   browseButton: document.getElementById('browse-button'),
   waveformContainer: document.getElementById('waveform'),
 
-  // Transcription elements
+  // Controls
   languageSelect: document.getElementById('language-select'),
+  modeWholeRadio: document.getElementById('mode-whole'),
+  modePartsRadio: document.getElementById('mode-parts'),
+  chunkDurationGroup: document.getElementById('chunk-duration-group'),
+  chunkDurationInput: document.getElementById('chunk-duration'),
+  outputFolderPath: document.getElementById('output-folder-path'),
+  selectOutputFolderButton: document.getElementById('select-output-folder'),
   transcribeButton: document.getElementById('transcribe-button'),
-  progressElement: document.getElementById('progress'),
 
-  // Output elements
+  // Status
+  progressElement: document.getElementById('progress'),
+  progressMessageElement: document.getElementById('progress-message'),
+  progressStageElement: document.getElementById('progress-stage'),
+  progressBarElement: document.getElementById('progress-bar'),
+  progressPercentElement: document.getElementById('progress-percent'),
+  errorMessageElement: document.getElementById('error-message'),
+  successMessageElement: document.getElementById('success-message'),
+
+  // Output
   outputSection: document.getElementById('output-section'),
   transcriptionContent: document.getElementById('transcription-content'),
   exportButton: document.getElementById('export-button'),
@@ -29,18 +41,12 @@ const DOMElements = {
   copyButton: document.getElementById('copy-button'),
   clearButton: document.getElementById('clear-button'),
 
-  // Settings elements
+  // Settings modal
   settingsButton: document.getElementById('settings-button'),
   settingsModal: document.getElementById('settings-modal'),
   closeModalButton: document.getElementById('close-modal'),
   saveSettingsButton: document.getElementById('save-settings'),
   apiKeyInput: document.getElementById('api-key'),
-  modelSelect: document.getElementById('model'),
-  useLocalModelCheckbox: document.getElementById('use-local-model'),
+}
 
-  // Notification elements
-  errorMessageElement: document.getElementById('error-message'),
-  successMessageElement: document.getElementById('success-message'),
-};
-
-export default DOMElements;
+export default DOMElements

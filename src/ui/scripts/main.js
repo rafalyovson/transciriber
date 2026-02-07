@@ -1,54 +1,35 @@
-import { setupEventListeners } from './event-handlers.js';
-import { loadSettings } from './settings.js';
-import { loadLanguages } from './transcription.js';
-import { loadDefaultOutputFolder } from './settings.js';
-import { setOutputFolder } from './state.js';
-import Bridge from './bridge.js';
+import Bridge from './bridge.js'
+import DOMElements from './dom-elements.js'
+import { setupEventListeners } from './event-handlers.js'
+import { loadDefaultOutputFolder, loadSettings } from './settings.js'
+import { setOutputFolder } from './state.js'
+import { loadLanguages, syncModeControls, updateModeSelection } from './transcription.js'
 
 /**
  * Initialize the application
  */
 async function init() {
-  console.log('Initializing application...');
+  console.log('Initializing Transcriber Studio...')
 
   try {
-    // Log Bridge availability
-    console.log('Bridge object available:', Bridge !== undefined);
-    console.log('Bridge methods:', Object.keys(Bridge));
+    console.log('Bridge methods:', Object.keys(Bridge))
 
-    // Load settings from localStorage if available
-    console.log('Loading settings...');
-    loadSettings();
+    loadSettings()
+    setupEventListeners()
 
-    // Set up event listeners
-    console.log('Setting up event listeners...');
-    setupEventListeners();
+    syncModeControls()
+    updateModeSelection()
 
-    // Load languages
-    console.log('Loading languages...');
-    try {
-      await loadLanguages();
-      console.log('Languages loaded successfully');
-    } catch (error) {
-      console.error('Error loading languages:', error);
-    }
+    await loadLanguages()
 
-    // Load default output location (Downloads folder)
-    console.log('Loading default output folder...');
-    try {
-      const defaultFolder = await loadDefaultOutputFolder();
-      console.log('Default output folder:', defaultFolder);
-      setOutputFolder(defaultFolder);
-    } catch (error) {
-      console.error('Error loading default output folder:', error);
-    }
+    const defaultFolder = await loadDefaultOutputFolder()
+    setOutputFolder(defaultFolder)
+    DOMElements.outputFolderPath.textContent = defaultFolder || 'Current working directory'
 
-    console.log('Initialization complete');
+    console.log('Initialization complete')
   } catch (error) {
-    console.error('Error during initialization:', error);
+    console.error('Error during initialization:', error)
   }
 }
 
-// Initialize the application when the DOM is loaded
-document.addEventListener('DOMContentLoaded', init);
-
+document.addEventListener('DOMContentLoaded', init)

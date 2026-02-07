@@ -1,7 +1,7 @@
-import { assertEquals, assertExists } from 'https://deno.land/std@0.220.1/assert/mod.ts'
-import { join } from 'https://deno.land/std@0.220.1/path/mod.ts'
-import { ensureDir } from 'https://deno.land/std@0.220.1/fs/ensure_dir.ts'
-import { ensureFile } from 'https://deno.land/std@0.220.1/fs/ensure_file.ts'
+import { assertEquals, assertExists } from '@std/assert'
+import { join } from '@std/path'
+import { ensureDir } from '@std/fs/ensure-dir'
+import { ensureFile } from '@std/fs/ensure-file'
 
 // Define test constants
 const TEST_DIR = join(Deno.cwd(), 'test')

@@ -2,64 +2,54 @@
  * Bridge Module
  *
  * Handles communication between the UI and the backend server through HTTP requests.
- * Provides an API for file operations, transcription, and language management.
  */
 
-// Base URL for API requests
-const API_BASE_URL = 'http://localhost:8000/api';
-
-/**
- * File Operations
- */
+const API_BASE_URL = `${window.location.origin}/api`
 
 /**
  * Upload a file to the server
- * @param {File} file - The file to upload
- * @returns {Promise<Object>} Result of the upload operation
+ * @param {File} file
+ * @returns {Promise<object>}
  */
 async function uploadFile(file) {
   try {
-    const formData = new FormData();
-    formData.append('file', file);
+    const formData = new FormData()
+    formData.append('file', file)
 
     const response = await fetch(`${API_BASE_URL}/uploadFile`, {
       method: 'POST',
-      body: formData
-    });
+      body: formData,
+    })
 
-    return await response.json();
+    return await response.json()
   } catch (error) {
-    console.error('Error uploading file:', error);
-    return { success: false, error: error.message };
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : String(error),
+    }
   }
 }
 
 /**
- * Folder Management
- */
-
-/**
- * Select an output folder using the native file dialog
- * @returns {Promise<Object>} Object containing available folders and current folder
+ * Select an output folder using native dialog
+ * @returns {Promise<object>}
  */
 async function selectOutputFolder() {
   try {
-    const response = await fetch(`${API_BASE_URL}/selectOutputFolder`);
-    const data = await response.json();
-    return {
-      folders: data.folders || [],
-      current: data.current || ''
-    };
+    const response = await fetch(`${API_BASE_URL}/selectOutputFolder`)
+    return await response.json()
   } catch (error) {
-    console.error('Error selecting output folder:', error);
-    return { folders: [], current: '' };
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : String(error),
+    }
   }
 }
 
 /**
  * Set the output folder
- * @param {string} folder - The folder path to set as output
- * @returns {Promise<Object>} Result of the operation
+ * @param {string} folder
+ * @returns {Promise<object>}
  */
 async function setOutputFolder(folder) {
   try {
@@ -69,45 +59,38 @@ async function setOutputFolder(folder) {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({ folder }),
-    });
+    })
 
-    return await response.json();
+    return await response.json()
   } catch (error) {
-    console.error('Error setting output folder:', error);
-    return { success: false, error: error.message };
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : String(error),
+    }
   }
 }
 
 /**
- * Get the default output folder
- * @returns {Promise<Object>} Object containing the default folder
+ * Get default output folder
+ * @returns {Promise<object>}
  */
 async function getDefaultFolder() {
   try {
-    const response = await fetch(`${API_BASE_URL}/getDefaultFolder`);
-    const data = await response.json();
-    return data;
+    const response = await fetch(`${API_BASE_URL}/getDefaultFolder`)
+    return await response.json()
   } catch (error) {
-    console.error('Error getting default folder:', error);
-    return { success: false, error: error.message };
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : String(error),
+    }
   }
 }
 
 /**
- * Transcription
- */
-
-/**
- * Transcribe an audio file
- * @param {string} filePath - Path to the audio file
- * @param {Object} options - Transcription options
- * @param {number} options.chunkDuration - Duration of each chunk in seconds
- * @param {string} options.languageCode - Language code for transcription
- * @param {string} options.outputFolder - Folder to save the transcription
- * @param {string} options.apiKey - API key for the transcription service
- * @param {string} options.model - Model to use for transcription
- * @param {boolean} options.useLocalModel - Whether to use a local model
- * @returns {Promise<Object>} Transcription result
+ * Transcribe audio file
+ * @param {string} filePath
+ * @param {object} options
+ * @returns {Promise<object>}
  */
 async function transcribeAudio(filePath, options) {
   try {
@@ -117,79 +100,115 @@ async function transcribeAudio(filePath, options) {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({ filePath, options }),
-    });
+    })
 
-    const result = await response.json();
-
-    // Add information about the Markdown file if available
-    if (result.success && result.outputPath) {
-      result.markdownPath = result.outputPath;
-    }
-
-    return result;
+    return await response.json()
   } catch (error) {
-    console.error('Error transcribing audio:', error);
     return {
       success: false,
-      error: error.message || 'Unknown error occurred during transcription',
-    };
+      error: error instanceof Error ? error.message : 'Unknown error occurred during transcription',
+      modeRequested: 'whole',
+      modeUsed: 'whole',
+      fallbackApplied: false,
+      warnings: [],
+      mediaKind: 'audio',
+      audioExtracted: false,
+      isComplete: false,
+    }
   }
 }
 
 /**
- * Language Management
+ * Start a transcription job (async + SSE).
+ * @param {string} filePath
+ * @param {object} options
+ * @returns {Promise<object>}
  */
+async function startTranscriptionJob(filePath, options) {
+  try {
+    const response = await fetch(`${API_BASE_URL}/transcriptionJobs`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ filePath, options }),
+    })
+    return await response.json()
+  } catch (error) {
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Failed to start transcription job',
+    }
+  }
+}
 
 /**
- * Get a list of available languages for transcription
- * @returns {Promise<string[]>} List of language codes
+ * Subscribe to live transcription events.
+ * @param {string} jobId
+ * @returns {EventSource}
+ */
+function subscribeToTranscriptionJob(jobId) {
+  return new EventSource(`${API_BASE_URL}/transcriptionJobs/${encodeURIComponent(jobId)}/events`)
+}
+
+/**
+ * Fetch latest job snapshot.
+ * @param {string} jobId
+ * @returns {Promise<object>}
+ */
+async function getTranscriptionJob(jobId) {
+  try {
+    const response = await fetch(`${API_BASE_URL}/transcriptionJobs/${encodeURIComponent(jobId)}`)
+    return await response.json()
+  } catch (error) {
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Failed to fetch transcription job',
+    }
+  }
+}
+
+/**
+ * Get available languages
+ * @returns {Promise<string[]>}
  */
 async function getAvailableLanguages() {
   try {
-    const response = await fetch(`${API_BASE_URL}/getAvailableLanguages`);
-    return await response.json();
-  } catch (error) {
-    console.error('Error getting available languages:', error);
-    return ['en']; // Default to English if error
+    const response = await fetch(`${API_BASE_URL}/getAvailableLanguages`)
+    return await response.json()
+  } catch (_error) {
+    return ['en']
   }
 }
 
 /**
- * Get the full name of a language from its code
- * @param {string} code - Language code
- * @returns {Promise<string>} Language name
+ * Get language name
+ * @param {string} code
+ * @returns {Promise<string>}
  */
 async function getLanguageName(code) {
   try {
-    const response = await fetch(`${API_BASE_URL}/getLanguageName?code=${code}`);
-    const data = await response.json();
-    return data.name || code;
-  } catch (error) {
-    console.error('Error getting language name:', error);
-    return code; // Return the code if error
+    const response = await fetch(`${API_BASE_URL}/getLanguageName?code=${code}`)
+    const data = await response.json()
+    return data.name || code
+  } catch (_error) {
+    return code
   }
 }
 
-// Create the Bridge object with all functions
 const Bridge = {
-  // File operations
   uploadFile,
-
-  // Folder management
   selectOutputFolder,
   setOutputFolder,
   getDefaultFolder,
-
-  // Transcription
   transcribeAudio,
-
-  // Language management
+  startTranscriptionJob,
+  subscribeToTranscriptionJob,
+  getTranscriptionJob,
   getAvailableLanguages,
   getLanguageName,
-};
+}
 
-// Expose to window for backward compatibility
-window.Bridge = Bridge;
+window.Bridge = Bridge
 
-// Export as default
-export default Bridge;
+export default Bridge

@@ -1,9 +1,9 @@
 /**
  * Service for splitting audio files into smaller chunks
  */
-import { ensureDir } from 'https://deno.land/std@0.220.1/fs/ensure_dir.ts'
-import { join, parse } from 'https://deno.land/std@0.220.1/path/mod.ts'
-import { Result } from 'types'
+import { ensureDir } from '@std/fs/ensure-dir'
+import { basename, isAbsolute, join } from '@std/path'
+import { AudioChunkSegment, Result } from 'types'
 
 /** Configuration for audio splitting */
 export type AudioSplitOptions = {
@@ -17,10 +17,45 @@ export type AudioSplitOptions = {
  * Service to split audio files into smaller segments
  */
 export class AudioSplitterService {
+  private parseSegmentList(csvContent: string, outputDir: string): AudioChunkSegment[] {
+    const lines = csvContent
+      .split('\n')
+      .map((line) => line.trim())
+      .filter((line) => line.length > 0)
+
+    const segments: AudioChunkSegment[] = []
+    for (const [index, line] of lines.entries()) {
+      const columns = line.split(',')
+      if (columns.length < 3) {
+        continue
+      }
+
+      const fileColumn = columns[0].trim()
+      const startSec = Number.parseFloat(columns[1])
+      const endSec = Number.parseFloat(columns[2])
+
+      if (
+        !fileColumn || !Number.isFinite(startSec) || !Number.isFinite(endSec) || endSec <= startSec
+      ) {
+        continue
+      }
+
+      segments.push({
+        path: isAbsolute(fileColumn) ? fileColumn : join(outputDir, basename(fileColumn)),
+        index,
+        startSec,
+        endSec,
+        durationSec: endSec - startSec,
+      })
+    }
+
+    return segments
+  }
+
   /**
    * Splits an audio file into segments of specified duration
    */
-  async splitAudio(options: AudioSplitOptions): Promise<Result<string[], Error>> {
+  async splitAudio(options: AudioSplitOptions): Promise<Result<AudioChunkSegment[], Error>> {
     const { inputFile, outputDir, segmentDuration, filePrefix = 'chunk' } = options
 
     try {
@@ -46,26 +81,40 @@ export class AudioSplitterService {
       // Create output directory if it doesn't exist
       await ensureDir(outputDir)
 
-      // Get the base name and extension of the input file
-      const { ext } = parse(inputFile)
-
       // Normalize the input file path
       const normalizedInput = await Deno.realPath(inputFile)
+      const segmentListPath = join(outputDir, `${filePrefix}_segments.csv`)
+      const outputPattern = join(outputDir, `${filePrefix}_%05d.wav`)
 
       // Execute FFmpeg command using Deno.Command API
       const command = new Deno.Command('ffmpeg', {
         args: [
+          '-hide_banner',
+          '-loglevel',
+          'error',
+          '-y',
           '-i',
           normalizedInput,
+          '-map',
+          '0:a:0',
+          '-vn',
+          '-ac',
+          '1',
+          '-ar',
+          '16000',
+          '-c:a',
+          'pcm_s16le',
           '-f',
           'segment',
           '-segment_time',
           segmentDuration.toString(),
-          '-c',
-          'copy',
-          '-map',
-          '0:a',
-          `${outputDir}/${filePrefix}_%03d${ext}`,
+          '-reset_timestamps',
+          '1',
+          '-segment_list',
+          segmentListPath,
+          '-segment_list_type',
+          'csv',
+          outputPattern,
         ],
         stdout: 'piped',
         stderr: 'piped',
@@ -82,22 +131,16 @@ export class AudioSplitterService {
         }
       }
 
-      // Get the list of generated files
-      const outputFiles: string[] = []
-      for await (const entry of Deno.readDir(outputDir)) {
-        if (entry.isFile && entry.name.startsWith(`${filePrefix}_`) && entry.name.endsWith(ext)) {
-          outputFiles.push(join(outputDir, entry.name))
+      const segmentListContent = await Deno.readTextFile(segmentListPath)
+      const segments = this.parseSegmentList(segmentListContent, outputDir)
+      if (segments.length === 0) {
+        return {
+          ok: false,
+          error: new Error('FFmpeg produced no audio segments.'),
         }
       }
 
-      // Sort files by their numeric suffix to maintain order
-      outputFiles.sort((a, b) => {
-        const numA = parseInt(a.match(/(\d+)(?=\.[^.]+$)/)?.[0] || '0', 10)
-        const numB = parseInt(b.match(/(\d+)(?=\.[^.]+$)/)?.[0] || '0', 10)
-        return numA - numB
-      })
-
-      return { ok: true, data: outputFiles }
+      return { ok: true, data: segments }
     } catch (error) {
       return {
         ok: false,

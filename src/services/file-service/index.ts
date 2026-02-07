@@ -1,5 +1,5 @@
-import { ensureDir } from 'https://deno.land/std@0.220.1/fs/ensure_dir.ts'
-import { extname, join, parse } from 'https://deno.land/std@0.220.1/path/mod.ts'
+import { ensureDir } from '@std/fs/ensure-dir'
+import { extname, join, parse } from '@std/path'
 import { Result } from 'types'
 
 /**
@@ -155,6 +155,38 @@ export class FileService {
     await Deno.writeTextFile(outputPath, formattedText)
     console.log(`Transcription saved to: ${outputPath}`)
 
+    return outputPath
+  }
+
+  /**
+   * Saves subtitle sidecar content to the output directory.
+   * @param content - Subtitle content
+   * @param fileName - Original media file name
+   * @param format - Subtitle format extension
+   * @returns Path to the saved subtitle file
+   */
+  async saveSubtitle(content: string, fileName: string, format: 'srt' | 'vtt'): Promise<string> {
+    const baseName = parse(fileName).name
+    const outputFileName = `${baseName}.${format}`
+    const outputPath = join(this.outputDir, outputFileName)
+    await Deno.writeTextFile(outputPath, content)
+    return outputPath
+  }
+
+  /**
+   * Saves subtitle quality diagnostics as JSON.
+   * @param report - Quality diagnostics payload
+   * @param fileName - Original media file name
+   * @returns Path to the saved quality report
+   */
+  async saveSubtitleQualityReport(
+    report: Record<string, unknown>,
+    fileName: string,
+  ): Promise<string> {
+    const baseName = parse(fileName).name
+    const outputFileName = `${baseName}.subtitle-quality.json`
+    const outputPath = join(this.outputDir, outputFileName)
+    await Deno.writeTextFile(outputPath, JSON.stringify(report, null, 2))
     return outputPath
   }
 

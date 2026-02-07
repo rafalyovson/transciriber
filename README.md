@@ -1,171 +1,167 @@
-# Transcriber
+# Transcriber Studio
 
-A modern, user-friendly audio transcription application built with Deno.
+Audio and MP4 video transcription app built with Deno and ElevenLabs Speech-to-Text.
+
+## What Changed In This Iteration
+
+- Migrated ElevenLabs SDK to `@elevenlabs/elevenlabs-js`.
+- Default transcription model is now `scribe_v2`.
+- Added transcription mode choice:
+  - `whole`: transcribe entire file in one request.
+  - `parts`: split with FFmpeg and transcribe chunk-by-chunk.
+- Added automatic fallback from `whole` -> `parts` when whole-file transcription fails due size/process constraints.
+- Reworked frontend UI/UX into a studio dashboard flow.
+- Added MP4 upload support with local audio extraction before transcription.
+- Added limit-aware, full-coverage enforcement for long media transcription.
+- Added live web progress streaming with Server-Sent Events (SSE) and partial transcript updates for `parts` mode.
+- Added production subtitle sidecar generation for video jobs (`.srt` + `.vtt`) with structural strict validation by default.
+- Added Armenian-aware subtitle profile behavior (`hy`/`hyw` track tags, Unicode-safe normalization, mixed-script warnings).
 
 ## Features
 
-- Transcribe audio files to text using ElevenLabs API
-- Split audio into manageable chunks for better transcription accuracy
-- Customize language, model, and output location
-- Modern dark mode UI with intuitive controls
-- Export transcriptions in various formats (TXT, SRT, VTT)
-- Support for local and cloud-based transcription models
-- API key configuration through the UI settings
-- Modular architecture for better maintainability
+- Drag-and-drop audio upload and MP4 video upload
+- Language selection
+- Mode selection: whole file or in parts
+- Configurable chunk duration for parts mode
+- Video inputs are automatically routed to parts mode for full coverage
+- Output folder selection from UI
+- Markdown output saved to disk
+- Copy and export transcript (`.txt`) and subtitle sidecars (`.srt`, `.vtt`)
+- CLI and browser UI modes
+- Live web progress stages/chunk counters with polling fallback if SSE disconnects
+- Subtitle quality reporting (`pass`, `review_required`, `fail`) and artifact metadata in API/CLI/UI
 
 ## Requirements
 
-- [Deno](https://deno.land/) v1.37.0 or higher
-- FFmpeg (for audio splitting)
-- ElevenLabs API key (can be configured in the UI)
+- [Deno](https://deno.com/) v2.0+
+- FFmpeg + ffprobe (required for MP4 extraction, `parts` mode, and fallback mode)
+- ElevenLabs API key
 
 ## Installation
 
-1. Clone this repository:
-   ```bash
-   git clone https://github.com/yourusername/transcriber.git
-   cd transcriber
-   ```
+1. Clone the repo:
 
-2. Install FFmpeg if you don't have it already:
-   - **macOS**: `brew install ffmpeg`
-   - **Linux**: `sudo apt install ffmpeg`
-   - **Windows**: Download from [ffmpeg.org](https://ffmpeg.org/download.html) or use Chocolatey: `choco install ffmpeg`
+```bash
+git clone https://github.com/yourusername/transcriber.git
+cd transcriber
+```
 
-3. Create a `.env` file in the project root (optional):
-   ```
-   ELEVENLABS_API_KEY=your_api_key_here
-   INPUT_DIR=./inputs
-   OUTPUT_DIR=./outputs
-   LANGUAGE_CODE=hy
-   CHUNK_DURATION=30
-   ```
+2. Install FFmpeg:
+
+- macOS: `brew install ffmpeg`
+- Linux: `sudo apt install ffmpeg`
+- Windows: install from [ffmpeg.org](https://ffmpeg.org/download.html) or `choco install ffmpeg`
+
+3. Create `.env` (optional but recommended):
+
+```env
+ELEVENLABS_API_KEY=your_api_key_here
+INPUT_DIR=inputs
+OUTPUT_DIR=outputs
+LANGUAGE=hy
+CHUNK_DURATION=30
+```
 
 ## Usage
 
-### Using Deno Tasks
-
-The application provides several convenient tasks for running different versions:
+### Deno Tasks
 
 ```bash
-# Run the default application (CLI mode)
+# CLI
 deno task start
 
-# Run the UI version
+# UI server
 deno task start:ui
 
-# Run the CLI version explicitly
-deno task start:cli
-
-# Development mode with file watching (auto-reload on changes)
-deno task dev        # Default mode
-deno task dev:ui     # UI mode with auto-reload
-deno task dev:cli    # CLI mode with auto-reload
+# Dev (watch mode)
+deno task dev
+deno task dev:ui
 ```
 
-### Command Line Interface
-
-Run the application with a specific audio file:
+### CLI
 
 ```bash
-deno run --allow-read --allow-write --allow-net --allow-env --allow-run --env-file=.env main.ts path/to/your/audio-file.mp3
+deno run --allow-read --allow-write --allow-net --allow-env --allow-run --env-file=.env main.ts [options] <media-file>
 ```
 
-### Graphical User Interface
+Options:
 
-Run the application with the UI:
+- `--mode=whole|parts` (default: `whole`)
+- `--chunk-duration=<seconds>` (used when mode is `parts`; defaults to `CHUNK_DURATION` or `30`)
+
+Examples:
+
+```bash
+# Whole-file transcription
+deno run -A --env-file=.env main.ts ./inputs/meeting.mp3 --mode=whole
+
+# Chunked transcription (45s chunks)
+deno run -A --env-file=.env main.ts ./inputs/meeting.mp3 --mode=parts --chunk-duration=45
+
+# MP4 video transcription (audio extracted first)
+deno run -A --env-file=.env main.ts ./inputs/interview.mp4 --mode=whole
+```
+
+### UI
 
 ```bash
 deno run --allow-read --allow-write --allow-net --allow-env --allow-run --env-file=.env main.ts --ui
 ```
 
-Then open your browser to `http://localhost:8000` to access the application.
+Open <http://localhost:8000>.
 
-## API Key Configuration
+Live web job endpoints:
 
-You can configure your ElevenLabs API key in two ways:
+- `POST /api/transcriptionJobs`
+- `GET /api/transcriptionJobs/:jobId/events` (SSE)
+- `GET /api/transcriptionJobs/:jobId`
+- `POST /api/transcribeAudio` remains available as a synchronous compatibility endpoint
 
-1. **Environment Variable**: Set the `ELEVENLABS_API_KEY` in your `.env` file or system environment variables.
-2. **UI Settings**: Click the settings icon in the application and enter your API key in the settings modal.
+## API Key Behavior
+
+The app resolves API keys in this order:
+
+1. API key entered in UI settings
+2. `ELEVENLABS_API_KEY` from environment
+
+## Output
+
+- Transcript is saved as Markdown in the selected output folder.
+- Successful video runs also save subtitle sidecars: `<base>.srt` and `<base>.vtt`.
+- The UI export menu prefers backend-generated subtitle content and only uses approximate timing when backend subtitles are unavailable.
+- MP4 inputs are converted to mono 16kHz WAV before transcription, then processed with the selected mode.
+- Runs include completeness metadata (`isComplete`, chunk summary, coverage ratio) and subtitle metadata (`subtitleGenerated`, `subtitlePaths`, `subtitleQuality`).
+
+### Subtitle Quality Policy
+
+- Video jobs must produce subtitle artifacts (`.srt` and `.vtt`) to be considered successful.
+- Structural subtitle issues fail the run (invalid timings, overlap/order issues, insufficient coverage).
+- Readability issues are auto-repaired when possible; remaining readability issues are reported as `review_required` and do not fail the run.
+- Full diagnostics are saved to a subtitle quality report sidecar file (`<base>.subtitle-quality.json`).
 
 ## Development
 
-### Project Structure
-
-```
-transcriber/
-├── main.ts                 # Entry point
-├── src/
-│   ├── app/                # Application logic
-│   │   ├── index.ts        # Main application class
-│   │   ├── cli/            # CLI application
-│   │   └── ui/             # UI application backend
-│   ├── services/           # Core services
-│   │   ├── audio-splitter/ # Audio splitting service
-│   │   ├── file/           # File operations
-│   │   └── transcription/  # Transcription service
-│   ├── types/              # TypeScript type definitions
-│   ├── ui/                 # UI components
-│   │   ├── index.html      # Main HTML file
-│   │   ├── styles/         # CSS styles
-│   │   └── scripts/        # JavaScript modules
-│   │       ├── bridge.js           # Backend communication
-│   │       ├── dom-elements.js     # DOM element references
-│   │       ├── event-handlers.js   # Event listeners
-│   │       ├── export.js           # Export functionality
-│   │       ├── file-processing.js  # File handling
-│   │       ├── main.js             # Main entry point
-│   │       ├── settings.js         # Settings management
-│   │       ├── state.js            # Application state
-│   │       ├── transcription.js    # Transcription logic
-│   │       └── ui-utils.js         # UI utilities
-│   └── utils/              # Utility functions
-└── static/                 # Static assets
-    ├── fonts/              # Font files
-    └── icons/              # Icon files
-```
-
-### Frontend Architecture
-
-The frontend code is organized into modular ES modules:
-
-- **main.js**: Application initialization and setup
-- **bridge.js**: Communication with the backend API
-- **dom-elements.js**: Centralized DOM element references
-- **event-handlers.js**: Event listener setup and handling
-- **export.js**: Transcription export functionality
-- **file-processing.js**: File upload and processing
-- **settings.js**: User settings management
-- **state.js**: Application state management
-- **transcription.js**: Transcription process handling
-- **ui-utils.js**: UI helper functions
-
-### Running Tests
+### Tests
 
 ```bash
 deno task test
 ```
 
-### Formatting and Linting
+### Lint and Format
 
 ```bash
-deno task fmt
 deno task lint
+deno task fmt
 ```
 
-### Building Executables
-
-You can build standalone executables for different platforms:
+### Build Executables
 
 ```bash
-# Build for all platforms
 deno task build
-
-# Build for specific platforms
-deno task build:macos      # macOS (Intel)
-deno task build:macos-arm  # macOS (Apple Silicon)
-deno task build:windows    # Windows
-deno task build:linux      # Linux
+deno task build:macos
+deno task build:macos-arm
+deno task build:windows
+deno task build:linux
 ```
 
 ## License

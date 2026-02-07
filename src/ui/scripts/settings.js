@@ -1,48 +1,76 @@
-import DOMElements from './dom-elements.js';
-import { getSettings, updateSettings } from './state.js';
-import Bridge from './bridge.js';
+import DOMElements from './dom-elements.js'
+import {
+  getDefaultSettings,
+  getSettings,
+  setChunkDuration,
+  setTranscriptionMode,
+  updateSettings,
+} from './state.js'
+import Bridge from './bridge.js'
+
+const STORAGE_KEY = 'transcriber_settings'
+
+function persistSettings() {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(getSettings()))
+}
+
+function applySettingsToForm() {
+  const settings = getSettings()
+
+  DOMElements.apiKeyInput.value = settings.apiKey || ''
+
+  DOMElements.modeWholeRadio.checked = settings.transcriptionMode === 'whole'
+  DOMElements.modePartsRadio.checked = settings.transcriptionMode === 'parts'
+
+  DOMElements.chunkDurationInput.value = String(settings.chunkDuration || 30)
+  DOMElements.chunkDurationGroup.classList.toggle(
+    'hidden',
+    settings.transcriptionMode !== 'parts',
+  )
+}
 
 /**
- * Save settings to localStorage
+ * Save API settings from modal
  */
 export function saveSettings() {
-  // Update settings object
-  const newSettings = {
+  updateSettings({
     apiKey: DOMElements.apiKeyInput.value.trim(),
-    model: DOMElements.modelSelect.value,
-    useLocalModel: DOMElements.useLocalModelCheckbox.checked
-  };
+  })
 
-  updateSettings(newSettings);
+  persistSettings()
+  DOMElements.settingsModal.classList.remove('show')
+}
 
-  // Save to localStorage
-  localStorage.setItem('transcriber_settings', JSON.stringify(getSettings()));
-
-  // Close modal
-  DOMElements.settingsModal.style.display = 'none';
+/**
+ * Persist mode/chunk preferences from main controls
+ */
+export function saveModePreferences(mode, chunkDuration) {
+  setTranscriptionMode(mode)
+  setChunkDuration(chunkDuration)
+  persistSettings()
 }
 
 /**
  * Load settings from localStorage
  */
 export function loadSettings() {
-  const savedSettings = localStorage.getItem('transcriber_settings');
+  const savedSettings = localStorage.getItem(STORAGE_KEY)
 
-  if (savedSettings) {
-    try {
-      const parsedSettings = JSON.parse(savedSettings);
-
-      // Update state
-      updateSettings(parsedSettings);
-
-      // Apply settings to form elements
-      DOMElements.apiKeyInput.value = parsedSettings.apiKey || '';
-      DOMElements.modelSelect.value = parsedSettings.model || 'scribe_v1';
-      DOMElements.useLocalModelCheckbox.checked = parsedSettings.useLocalModel || false;
-    } catch (error) {
-      console.error('Error parsing saved settings:', error);
-    }
+  if (!savedSettings) {
+    updateSettings(getDefaultSettings())
+    applySettingsToForm()
+    return
   }
+
+  try {
+    const parsedSettings = JSON.parse(savedSettings)
+    updateSettings(parsedSettings)
+  } catch (error) {
+    console.error('Error parsing saved settings:', error)
+    updateSettings(getDefaultSettings())
+  }
+
+  applySettingsToForm()
 }
 
 /**
@@ -50,18 +78,15 @@ export function loadSettings() {
  */
 export async function loadDefaultOutputFolder() {
   try {
-    // Get default folder
-    const response = await Bridge.getDefaultFolder();
-
-    if (response.success) {
-      // Set default output folder in state
-      return response.folder;
-    } else {
-      console.error('Failed to get default folder');
-      return '';
+    const response = await Bridge.getDefaultFolder()
+    if (!response.success) {
+      console.error('Failed to get default folder')
+      return ''
     }
+
+    return response.folder || ''
   } catch (error) {
-    console.error('Error loading default output folder:', error);
-    return '';
+    console.error('Error loading default output folder:', error)
+    return ''
   }
 }

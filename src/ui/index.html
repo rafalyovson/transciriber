@@ -3,123 +3,144 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Transcriber</title>
+  <title>Transcriber Studio</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="styles/main.css">
 </head>
 <body>
-  <div class="app-container">
+  <div class="background-layer" aria-hidden="true"></div>
+
+  <div class="app-shell">
     <header class="app-header">
-      <div class="logo">
-        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"></path>
-          <path d="M19 10v2a7 7 0 0 1-14 0v-2"></path>
-          <line x1="12" y1="19" x2="12" y2="22"></line>
-        </svg>
-        <span>Transcriber</span>
+      <div class="brand-block">
+        <div class="brand-icon" aria-hidden="true">
+          <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"></path>
+            <path d="M19 10v2a7 7 0 0 1-14 0v-2"></path>
+            <line x1="12" y1="19" x2="12" y2="22"></line>
+          </svg>
+        </div>
+        <div>
+          <h1>Transcriber Studio</h1>
+          <p>Speech-to-text with ElevenLabs Scribe v2</p>
+        </div>
       </div>
-      <button id="settings-button" class="settings-button" aria-label="Settings">
-        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <circle cx="12" cy="12" r="3"></circle>
-          <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
-        </svg>
+
+      <button id="settings-button" class="button ghost" type="button" aria-label="Open API settings">
+        API Settings
       </button>
     </header>
 
-    <main class="app-main">
-      <!-- Error and Success Messages -->
-      <div id="error-message" class="message error-message hidden"></div>
-      <div id="success-message" class="message success-message hidden"></div>
+    <main class="dashboard-grid">
+      <section class="panel panel-upload">
+        <div class="panel-title">
+          <h2>1. Upload Media</h2>
+          <p>Drop an audio file or MP4 video, or browse from disk.</p>
+        </div>
 
-      <section class="file-input-section">
         <div id="drop-area" class="drop-area">
           <div class="drop-area-content">
-            <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <svg xmlns="http://www.w3.org/2000/svg" width="42" height="42" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
               <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
               <polyline points="17 8 12 3 7 8"></polyline>
               <line x1="12" y1="3" x2="12" y2="15"></line>
             </svg>
-            <p>Drag and drop your audio file here</p>
+            <p>Drag and drop an audio file or MP4 video</p>
             <span>or</span>
-            <input type="file" id="file-input" accept="audio/*" style="display: none;">
-            <button id="browse-button" class="button secondary">
-              Browse Files
-            </button>
+            <input type="file" id="file-input" accept="audio/*,video/mp4,.mp4" hidden>
+            <button id="browse-button" class="button secondary" type="button">Browse Files</button>
           </div>
         </div>
 
-        <div id="file-preview" class="file-preview">
+        <div id="file-preview" class="file-preview hidden">
           <div class="file-info">
-            <div class="file-name" id="file-name">filename.mp3</div>
-            <div class="file-size" id="file-size">2.5 MB</div>
+            <div class="file-name" id="file-name"></div>
+            <div class="file-size" id="file-size"></div>
           </div>
-          <div class="waveform-container" id="waveform"></div>
+          <div class="waveform-container" id="waveform" aria-hidden="true"></div>
         </div>
       </section>
 
-      <section class="config-section">
-        <div class="config-row">
-          <div class="config-item">
-            <label for="language-select">Language</label>
-            <div class="language-container">
-              <select id="language-select" class="select-input">
-                <!-- Will be populated dynamically -->
-              </select>
-            </div>
+      <section class="panel panel-controls">
+        <div class="panel-title">
+          <h2>2. Configure Job</h2>
+          <p>Choose language, mode, and output folder.</p>
+        </div>
+
+        <div class="control-group">
+          <label for="language-select">Language</label>
+          <select id="language-select" class="select-input"></select>
+        </div>
+
+        <div class="control-group">
+          <span class="group-label">Transcription Mode</span>
+          <div class="segmented-control" role="radiogroup" aria-label="Transcription mode">
+            <label class="segment-option">
+              <input id="mode-whole" type="radio" name="transcription-mode" value="whole" checked>
+              <span>Whole File</span>
+            </label>
+            <label class="segment-option">
+              <input id="mode-parts" type="radio" name="transcription-mode" value="parts">
+              <span>In Parts</span>
+            </label>
           </div>
         </div>
-      </section>
 
-      <section class="action-section">
-        <button id="transcribe-button" class="button primary" disabled>
-          <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <polygon points="5 3 19 12 5 21 5 3"></polygon>
-          </svg>
+        <div id="chunk-duration-group" class="control-group hidden">
+          <label for="chunk-duration">Chunk Duration (seconds)</label>
+          <input id="chunk-duration" class="text-input" type="number" min="5" step="5" value="30">
+        </div>
+
+        <div class="control-group">
+          <label>Output Folder</label>
+          <div class="output-folder-row">
+            <div id="output-folder-path" class="output-path" title="Output folder path"></div>
+            <button id="select-output-folder" class="button secondary" type="button">Choose</button>
+          </div>
+        </div>
+
+        <button id="transcribe-button" class="button primary" type="button" disabled>
           Start Transcription
         </button>
       </section>
 
-      <section id="progress-section" class="progress-section">
-        <div id="progress" class="progress hidden">
-          <div class="spinner"></div>
-          <p>Transcribing your audio... This may take a few minutes.</p>
+      <section class="panel panel-status">
+        <div class="panel-title">
+          <h2>3. Job Status</h2>
+          <p id="progress-message">Waiting for a media file.</p>
         </div>
+
+        <div id="progress" class="progress hidden" aria-live="polite">
+          <div class="spinner" aria-hidden="true"></div>
+          <div class="progress-body">
+            <p id="progress-stage" class="progress-stage">Queued...</p>
+            <div class="progress-track" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+              <div id="progress-bar" class="progress-bar"></div>
+            </div>
+            <p id="progress-percent" class="progress-percent">0%</p>
+          </div>
+        </div>
+
+        <div id="error-message" class="message error-message hidden" role="alert"></div>
+        <div id="success-message" class="message success-message hidden" role="status"></div>
       </section>
 
-      <section id="output-section" class="output-section">
+      <section id="output-section" class="panel panel-output hidden">
         <div class="output-header">
-          <h2>Transcription Result</h2>
+          <h2>Transcript</h2>
           <div class="output-actions">
-            <button id="copy-button" class="button secondary">
-              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
-                <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
-              </svg>
-              Copy
-            </button>
+            <button id="copy-button" class="button secondary" type="button">Copy</button>
             <div class="export-dropdown">
-              <button id="export-button" class="button secondary">
-                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-                  <polyline points="7 10 12 15 17 10"></polyline>
-                  <line x1="12" y1="15" x2="12" y2="3"></line>
-                </svg>
-                Export
-              </button>
+              <button id="export-button" class="button secondary" type="button">Export</button>
               <div id="export-options" class="export-options">
-                <button id="export-txt" class="export-option">Text (.txt)</button>
-                <button id="export-srt" class="export-option">Subtitles (.srt)</button>
-                <button id="export-vtt" class="export-option">WebVTT (.vtt)</button>
+                <button id="export-txt" class="export-option" type="button">Text (.txt)</button>
+                <button id="export-srt" class="export-option" type="button">Subtitles (.srt)</button>
+                <button id="export-vtt" class="export-option" type="button">WebVTT (.vtt)</button>
               </div>
             </div>
-            <button id="clear-button" class="button danger">
-              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <polyline points="3 6 5 6 21 6"></polyline>
-                <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
-                <line x1="10" y1="11" x2="10" y2="17"></line>
-                <line x1="14" y1="11" x2="14" y2="17"></line>
-              </svg>
-              Clear
-            </button>
+            <button id="clear-button" class="button danger" type="button">Clear</button>
           </div>
         </div>
         <div id="transcription-content" class="transcription-content"></div>
@@ -127,47 +148,25 @@
     </main>
   </div>
 
-  <!-- Settings Modal -->
-  <div id="settings-modal" class="modal">
+  <div id="settings-modal" class="modal" role="dialog" aria-modal="true" aria-labelledby="settings-title">
     <div class="modal-content">
       <div class="modal-header">
-        <h2>Settings</h2>
-        <button id="close-modal" class="close-button" aria-label="Close">
-          <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <line x1="18" y1="6" x2="6" y2="18"></line>
-            <line x1="6" y1="6" x2="18" y2="18"></line>
-          </svg>
-        </button>
+        <h2 id="settings-title">API Settings</h2>
+        <button id="close-modal" class="close-button" aria-label="Close settings" type="button">×</button>
       </div>
       <div class="modal-body">
-        <div class="settings-group">
-          <h3>Transcription Settings</h3>
-          <div class="settings-item">
-            <label for="model">Transcription Model</label>
-            <select id="model" class="select-input">
-              <option value="scribe_v1">Whisper (Default)</option>
-              <option value="whisper-large">Whisper Large</option>
-              <option value="whisper-medium">Whisper Medium</option>
-              <option value="whisper-small">Whisper Small</option>
-            </select>
-          </div>
-          <div class="settings-item">
-            <label for="api-key">API Key (if using OpenAI)</label>
-            <input type="password" id="api-key" class="text-input" placeholder="Enter your API key">
-          </div>
-          <div class="settings-item checkbox">
-            <input type="checkbox" id="use-local-model">
-            <label for="use-local-model">Use local model (if available)</label>
-          </div>
+        <div class="settings-item">
+          <label for="api-key">ElevenLabs API Key</label>
+          <input type="password" id="api-key" class="text-input" placeholder="Enter API key (optional if in .env)">
+          <p class="settings-hint">If left empty, the app uses <code>ELEVENLABS_API_KEY</code> from environment variables.</p>
         </div>
       </div>
       <div class="modal-footer">
-        <button id="save-settings" class="button primary">Save Settings</button>
+        <button id="save-settings" class="button primary" type="button">Save</button>
       </div>
     </div>
   </div>
 
-  <!-- Scripts -->
   <script type="module" src="scripts/bridge.js"></script>
   <script type="module" src="scripts/main.js"></script>
 </body>

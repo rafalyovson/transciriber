@@ -36,7 +36,12 @@
     "test": "deno test --allow-read --allow-write --allow-env --env-file=.env"
   },
   "imports": {
-    "elevenlabs": "npm:elevenlabs@1.52.0",
+    "@std/assert": "jsr:@std/assert@1",
+    "@std/path": "jsr:@std/path@1",
+    "@std/fs/ensure-dir": "jsr:@std/fs@1/ensure-dir",
+    "@std/fs/ensure-file": "jsr:@std/fs@1/ensure-file",
+    "@std/fs/exists": "jsr:@std/fs@1/exists",
+    "@elevenlabs/elevenlabs-js": "npm:@elevenlabs/elevenlabs-js@2.34.0",
     "types": "./src/types/index.ts"
   }
 }
