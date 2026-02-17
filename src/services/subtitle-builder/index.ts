@@ -54,35 +54,29 @@ function parseTimestamp(value: string): number | null {
     return null
   }
 
-  return (hours * 3600) + (minutes * 60) + seconds + (millis / 1000)
+  return hours * 3600 + minutes * 60 + seconds + millis / 1000
+}
+
+function formatTimestamp(value: number, msSeparator: string): string {
+  const clamped = Math.max(0, value)
+  const hours = Math.floor(clamped / 3600)
+  const minutes = Math.floor((clamped % 3600) / 60)
+  const seconds = Math.floor(clamped % 60)
+  const millis = Math.floor((clamped - Math.floor(clamped)) * 1000)
+
+  return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${
+    seconds
+      .toString()
+      .padStart(2, '0')
+  }${msSeparator}${millis.toString().padStart(3, '0')}`
 }
 
 function formatSrtTimestamp(value: number): string {
-  const clamped = Math.max(0, value)
-  const hours = Math.floor(clamped / 3600)
-  const minutes = Math.floor((clamped % 3600) / 60)
-  const seconds = Math.floor(clamped % 60)
-  const millis = Math.floor((clamped - Math.floor(clamped)) * 1000)
-
-  return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${
-    seconds
-      .toString()
-      .padStart(2, '0')
-  },${millis.toString().padStart(3, '0')}`
+  return formatTimestamp(value, ',')
 }
 
 function formatVttTimestamp(value: number): string {
-  const clamped = Math.max(0, value)
-  const hours = Math.floor(clamped / 3600)
-  const minutes = Math.floor((clamped % 3600) / 60)
-  const seconds = Math.floor(clamped % 60)
-  const millis = Math.floor((clamped - Math.floor(clamped)) * 1000)
-
-  return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${
-    seconds
-      .toString()
-      .padStart(2, '0')
-  }.${millis.toString().padStart(3, '0')}`
+  return formatTimestamp(value, '.')
 }
 
 function splitSrtBlocks(content: string): string[] {
@@ -98,7 +92,10 @@ export function parseSrt(content: string, offsetSec = 0): SubtitleCue[] {
   const cues: SubtitleCue[] = []
 
   for (const block of splitSrtBlocks(content)) {
-    const lines = block.split('\n').map((line) => line.trimEnd()).filter((line) => line.length > 0)
+    const lines = block
+      .split('\n')
+      .map((line) => line.trimEnd())
+      .filter((line) => line.length > 0)
     if (lines.length < 2) continue
 
     const timeLineIndex = lines.findIndex((line) => line.includes('-->'))
@@ -132,7 +129,9 @@ export function parseSrt(content: string, offsetSec = 0): SubtitleCue[] {
 }
 
 function getProviderSrt(formats: AdditionalTranscriptFormat[]): string | null {
-  const direct = formats.find((format) => format.format.toLowerCase() === 'srt')
+  const direct = formats.find(
+    (format) => format.format.toLowerCase() === 'srt',
+  )
   return direct?.content?.trim() || null
 }
 
@@ -174,9 +173,10 @@ function wrapTextToLines(text: string, maxCharsPerLine: number): string[] {
   const normalized = normalizeCueText(text)
   if (!normalized) return []
 
-  const inputLines = normalized.split('\n').map((line) => line.trim()).filter((line) =>
-    line.length > 0
-  )
+  const inputLines = normalized
+    .split('\n')
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0)
   const wrapped: string[] = []
 
   for (const line of inputLines) {
@@ -186,7 +186,10 @@ function wrapTextToLines(text: string, maxCharsPerLine: number): string[] {
   return wrapped
 }
 
-function groupLinesIntoCueTexts(lines: string[], maxLinesPerCue: number): string[] {
+function groupLinesIntoCueTexts(
+  lines: string[],
+  maxLinesPerCue: number,
+): string[] {
   if (lines.length === 0) {
     return []
   }
@@ -200,7 +203,10 @@ function groupLinesIntoCueTexts(lines: string[], maxLinesPerCue: number): string
 }
 
 function splitTextByWords(text: string, targetParts: number): string[] {
-  const words = text.replace(/\n/g, ' ').split(/\s+/).filter((word) => word.length > 0)
+  const words = text
+    .replace(/\n/g, ' ')
+    .split(/\s+/)
+    .filter((word) => word.length > 0)
   if (words.length === 0) return []
 
   const parts = Math.max(1, Math.min(targetParts, words.length))
@@ -227,7 +233,10 @@ function expandCueTextsForDuration(
     return cueTexts
   }
 
-  const requiredCount = Math.max(1, Math.ceil(totalDurationSec / maxCueDurationSec))
+  const requiredCount = Math.max(
+    1,
+    Math.ceil(totalDurationSec / maxCueDurationSec),
+  )
   if (requiredCount <= cueTexts.length) {
     return cueTexts
   }
@@ -257,14 +266,22 @@ function expandCueTextsForDuration(
   return expanded
 }
 
-function allocateDurations(totalDurationSec: number, weights: number[]): number[] {
+function allocateDurations(
+  totalDurationSec: number,
+  weights: number[],
+): number[] {
   if (weights.length === 0) return []
 
-  const totalDuration = Math.max(MIN_CUE_DURATION_SEC * weights.length, totalDurationSec)
+  const totalDuration = Math.max(
+    MIN_CUE_DURATION_SEC * weights.length,
+    totalDurationSec,
+  )
   const safeWeights = weights.map((weight) => Math.max(1, weight))
   const totalWeight = safeWeights.reduce((sum, weight) => sum + weight, 0)
 
-  let durations = safeWeights.map((weight) => (weight / totalWeight) * totalDuration)
+  let durations = safeWeights.map(
+    (weight) => (weight / totalWeight) * totalDuration,
+  )
 
   let shortfall = 0
   for (let index = 0; index < durations.length; index++) {
@@ -311,7 +328,10 @@ function repairCue(
   cue: SubtitleCue,
   profile: LanguageSubtitleProfile,
 ): SubtitleCue[] {
-  const totalDurationSec = Math.max(MIN_CUE_DURATION_SEC, cue.endSec - cue.startSec)
+  const totalDurationSec = Math.max(
+    MIN_CUE_DURATION_SEC,
+    cue.endSec - cue.startSec,
+  )
   const wrappedLines = wrapTextToLines(cue.text, profile.maxCharsPerLine)
   let cueTexts = groupLinesIntoCueTexts(wrappedLines, profile.maxLinesPerCue)
 
@@ -319,9 +339,15 @@ function repairCue(
     cueTexts = [cue.text]
   }
 
-  cueTexts = expandCueTextsForDuration(cueTexts, totalDurationSec, profile.maxCueDurationSec)
+  cueTexts = expandCueTextsForDuration(
+    cueTexts,
+    totalDurationSec,
+    profile.maxCueDurationSec,
+  )
 
-  const weights = cueTexts.map((text) => text.replace(/\s+/g, ' ').trim().length)
+  const weights = cueTexts.map(
+    (text) => text.replace(/\s+/g, ' ').trim().length,
+  )
   const durations = allocateDurations(totalDurationSec, weights)
 
   const repaired: SubtitleCue[] = []
@@ -359,7 +385,10 @@ function repairCue(
   return repaired
 }
 
-function repairCues(cues: SubtitleCue[], profile: LanguageSubtitleProfile): SubtitleCue[] {
+function repairCues(
+  cues: SubtitleCue[],
+  profile: LanguageSubtitleProfile,
+): SubtitleCue[] {
   const repaired: SubtitleCue[] = []
 
   for (const cue of cues) {
@@ -371,8 +400,11 @@ function repairCues(cues: SubtitleCue[], profile: LanguageSubtitleProfile): Subt
 
 function sortWords(words: TranscriptionWord[]): TranscriptionWord[] {
   return [...words]
-    .filter((word) =>
-      Number.isFinite(word.startSec) && Number.isFinite(word.endSec) && word.endSec > word.startSec
+    .filter(
+      (word) =>
+        Number.isFinite(word.startSec) &&
+        Number.isFinite(word.endSec) &&
+        word.endSec > word.startSec,
     )
     .sort((a, b) => a.startSec - b.startSec)
 }
@@ -419,10 +451,14 @@ function buildCuesFromWords(
     const start = current[0].startSec
     const end = current[current.length - 1].endSec
     const durationSec = end - start
-    const previewText = current.map((item) => item.text).join(' ').replace(/\s+/g, ' ').trim()
+    const previewText = current
+      .map((item) => item.text)
+      .join(' ')
+      .replace(/\s+/g, ' ')
+      .trim()
 
     const shouldBreak = durationSec >= profile.maxCueDurationSec ||
-      previewText.length >= (profile.maxCharsPerLine * profile.maxLinesPerCue) ||
+      previewText.length >= profile.maxCharsPerLine * profile.maxLinesPerCue ||
       SENTENCE_BREAK_REGEX.test(word.text.trim())
 
     if (shouldBreak) {
@@ -455,7 +491,7 @@ function buildCuesFromPlainText(
     return []
   }
 
-  const totalDuration = sourceDurationSec > 0 ? sourceDurationSec : (sentences.length * 3)
+  const totalDuration = sourceDurationSec > 0 ? sourceDurationSec : sentences.length * 3
   const durations = allocateDurations(
     totalDuration,
     sentences.map((sentence) => sentence.length),
@@ -500,7 +536,9 @@ function normalizeCueSequence(
 
   for (const cue of sorted) {
     let startSec = roundToMs(Math.max(0, cue.startSec))
-    let endSec = roundToMs(Math.max(startSec + MIN_CUE_DURATION_SEC, cue.endSec))
+    let endSec = roundToMs(
+      Math.max(startSec + MIN_CUE_DURATION_SEC, cue.endSec),
+    )
 
     const minAllowedStart = roundToMs(previousEnd + minGapSec)
     if (startSec < minAllowedStart) {
@@ -530,27 +568,35 @@ function normalizeCueSequence(
 }
 
 export function serializeSrt(cues: SubtitleCue[]): string {
-  return cues
-    .map((cue, idx) => {
-      const index = idx + 1
-      return `${index}\n${formatSrtTimestamp(cue.startSec)} --> ${
-        formatSrtTimestamp(cue.endSec)
-      }\n${cue.text}`
-    })
-    .join('\n\n') + '\n'
+  return (
+    cues
+      .map((cue, idx) => {
+        const index = idx + 1
+        return `${index}\n${formatSrtTimestamp(cue.startSec)} --> ${
+          formatSrtTimestamp(
+            cue.endSec,
+          )
+        }\n${cue.text}`
+      })
+      .join('\n\n') + '\n'
+  )
 }
 
 export function serializeVtt(cues: SubtitleCue[]): string {
   const body = cues
-    .map((cue) =>
-      `${formatVttTimestamp(cue.startSec)} --> ${formatVttTimestamp(cue.endSec)}\n${cue.text}`
+    .map(
+      (cue) =>
+        `${formatVttTimestamp(cue.startSec)} --> ${formatVttTimestamp(cue.endSec)}\n${cue.text}`,
     )
     .join('\n\n')
 
   return `WEBVTT\n\n${body}\n`
 }
 
-function validateSerializedSubtitles(content: string, format: SubtitleFormat): boolean {
+function validateSerializedSubtitles(
+  content: string,
+  format: SubtitleFormat,
+): boolean {
   if (format === 'srt') {
     return parseSrt(content).length > 0
   }
@@ -599,7 +645,11 @@ export class SubtitleBuilderService {
         const merged: SubtitleCue[] = []
 
         for (const chunk of input.chunks) {
-          const wordCues = buildCuesFromWords(chunk.words, input.profile, chunk.startSec)
+          const wordCues = buildCuesFromWords(
+            chunk.words,
+            input.profile,
+            chunk.startSec,
+          )
           if (wordCues.length > 0) {
             merged.push(...wordCues)
             continue
@@ -620,7 +670,12 @@ export class SubtitleBuilderService {
         if (wordCues.length > 0) {
           cues = wordCues
         } else {
-          cues = buildCuesFromPlainText(input.text, input.profile, input.sourceDurationSec || 0, 0)
+          cues = buildCuesFromPlainText(
+            input.text,
+            input.profile,
+            input.sourceDurationSec || 0,
+            0,
+          )
         }
       }
 
@@ -635,7 +690,10 @@ export class SubtitleBuilderService {
     const srt = serializeSrt(normalizedCues)
     const vtt = serializeVtt(normalizedCues)
 
-    if (!validateSerializedSubtitles(srt, 'srt') || !validateSerializedSubtitles(vtt, 'vtt')) {
+    if (
+      !validateSerializedSubtitles(srt, 'srt') ||
+      !validateSerializedSubtitles(vtt, 'vtt')
+    ) {
       throw new Error('Generated subtitle output failed format validation.')
     }
 

@@ -1,10 +1,13 @@
+import { join } from '@std/path'
 import { TranscriptionApp } from '../index.ts'
 import { TranscriptionMode } from '../../types/index.ts'
 import { getChunkDuration, getLanguageCode } from '../../utils/env.ts'
+import { YouTubeDownloaderService } from '../../services/youtube-downloader/index.ts'
 
 type ParsedCLIArgs = {
   filePath: string
   mode: TranscriptionMode
+  modeExplicit: boolean
   chunkDuration: number
 }
 
@@ -17,6 +20,7 @@ const PARTS_MODE: TranscriptionMode = 'parts'
 export function parseCLIArgs(args: string[], defaultChunkDuration: number): ParsedCLIArgs {
   let filePath = ''
   let mode: TranscriptionMode = WHOLE_MODE
+  let modeExplicit = false
   let chunkDuration = defaultChunkDuration
 
   for (const arg of args) {
@@ -29,6 +33,7 @@ export function parseCLIArgs(args: string[], defaultChunkDuration: number): Pars
       const rawMode = arg.split('=')[1]?.trim().toLowerCase()
       if (rawMode === WHOLE_MODE || rawMode === PARTS_MODE) {
         mode = rawMode
+        modeExplicit = true
       } else {
         throw new Error(`Invalid mode "${rawMode}". Use --mode=whole or --mode=parts.`)
       }
@@ -51,6 +56,7 @@ export function parseCLIArgs(args: string[], defaultChunkDuration: number): Pars
   return {
     filePath,
     mode,
+    modeExplicit,
     chunkDuration,
   }
 }
@@ -59,10 +65,48 @@ export function parseCLIArgs(args: string[], defaultChunkDuration: number): Pars
  * Run the CLI application
  */
 export async function runCLI(): Promise<void> {
+  let downloadedFilePath: string | null = null
+
   try {
     const defaultChunkDuration = getChunkDuration()
     const languageCode = getLanguageCode()
-    const { filePath, mode, chunkDuration } = parseCLIArgs(Deno.args, defaultChunkDuration)
+    const { filePath: rawInput, mode: parsedMode, modeExplicit, chunkDuration } = parseCLIArgs(
+      Deno.args,
+      defaultChunkDuration,
+    )
+
+    let filePath = rawInput
+    let mode = parsedMode
+    let youtubeTitle: string | undefined
+
+    if (YouTubeDownloaderService.isYouTubeUrl(rawInput)) {
+      const ytService = new YouTubeDownloaderService()
+
+      console.log('Detected YouTube URL. Checking yt-dlp availability...')
+      const availCheck = await ytService.checkAvailability()
+      if (!availCheck.ok) {
+        console.error('Error:', availCheck.error.message)
+        Deno.exit(1)
+      }
+
+      console.log('Downloading audio from YouTube...')
+      const tempDir = join(Deno.cwd(), 'temp')
+      const downloadResult = await ytService.downloadAudio({ url: rawInput, outputDir: tempDir })
+      if (!downloadResult.ok) {
+        console.error('Error:', downloadResult.error.message)
+        Deno.exit(1)
+      }
+
+      filePath = downloadResult.data.filePath
+      downloadedFilePath = filePath
+      youtubeTitle = downloadResult.data.title
+      console.log(`Downloaded: "${youtubeTitle}" (${downloadResult.data.durationSec}s)`)
+
+      if (!modeExplicit) {
+        mode = 'parts'
+        console.log('YouTube input: using parts mode for full coverage.')
+      }
+    }
 
     const app = new TranscriptionApp({
       languageCode,
@@ -73,8 +117,9 @@ export async function runCLI(): Promise<void> {
 
     const outputDir = Deno.env.get('OUTPUT_DIR') || undefined
 
+    const displayName = youtubeTitle ? `"${youtubeTitle}"` : filePath
     console.log(
-      `Transcribing ${filePath} in ${mode} mode (chunk duration: ${chunkDuration}s, language: ${languageCode})`,
+      `Transcribing ${displayName} in ${mode} mode (chunk duration: ${chunkDuration}s, language: ${languageCode})`,
     )
     console.log('Processing file...')
 
@@ -173,7 +218,7 @@ export async function runCLI(): Promise<void> {
     const errorMessage = error instanceof Error ? error.message : String(error)
 
     console.error('Error:', errorMessage)
-    console.log('Usage: deno run -A main.ts [options] <file-path>')
+    console.log('Usage: deno run -A main.ts [options] <file-path-or-youtube-url>')
     console.log('Options:')
     console.log('  --ui                         Run with graphical user interface')
     console.log('  --mode=whole|parts           Transcription mode (default: whole)')
@@ -182,5 +227,13 @@ export async function runCLI(): Promise<void> {
     )
 
     Deno.exit(1)
+  } finally {
+    if (downloadedFilePath) {
+      try {
+        await Deno.remove(downloadedFilePath)
+      } catch {
+        // Ignore cleanup errors
+      }
+    }
   }
 }

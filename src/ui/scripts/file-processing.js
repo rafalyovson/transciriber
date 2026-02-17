@@ -1,5 +1,5 @@
 import DOMElements from './dom-elements.js'
-import { setCurrentFile, setCurrentFileData } from './state.js'
+import { setCurrentFile, setCurrentFileData, setTranscriptionMode } from './state.js'
 import { createWaveformVisualization, formatFileSize, showError } from './ui-utils.js'
 import Bridge from './bridge.js'
 
@@ -70,6 +70,80 @@ export async function processFile(file) {
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error)
     showError(`Error processing file: ${errorMessage}`)
+  }
+}
+
+function isYouTubeUrl(input) {
+  try {
+    const url = new URL(input)
+    const hostname = url.hostname.replace(/^www\./, '')
+    return hostname === 'youtube.com' || hostname === 'm.youtube.com' || hostname === 'youtu.be'
+  } catch {
+    return false
+  }
+}
+
+function formatDuration(seconds) {
+  const mins = Math.floor(seconds / 60)
+  const secs = Math.floor(seconds % 60)
+  return `${mins}:${secs.toString().padStart(2, '0')}`
+}
+
+/**
+ * Process a YouTube URL: validate, download, and prepare for transcription
+ */
+export async function processYouTubeUrl() {
+  const url = DOMElements.youtubeUrlInput.value.trim()
+
+  if (!url) {
+    showError('Please enter a YouTube URL.')
+    return
+  }
+
+  if (!isYouTubeUrl(url)) {
+    showError('Invalid YouTube URL. Please enter a valid youtube.com or youtu.be link.')
+    return
+  }
+
+  DOMElements.youtubeFetchButton.disabled = true
+  DOMElements.youtubeFetchButton.textContent = 'Fetching...'
+  DOMElements.youtubePreview.classList.add('hidden')
+
+  try {
+    const result = await Bridge.downloadYouTube(url)
+
+    if (!result.success) {
+      showError(`Failed to fetch YouTube video: ${result.error}`)
+      return
+    }
+
+    setCurrentFile(result.filePath)
+    setCurrentFileData({
+      originalName: result.originalName || `${result.youtubeTitle || 'youtube'}.wav`,
+      mimeType: result.mimeType || 'audio/wav',
+    })
+
+    DOMElements.youtubeTitleElement.textContent = result.youtubeTitle || 'Unknown title'
+    DOMElements.youtubeDurationElement.textContent = result.durationSec
+      ? formatDuration(result.durationSec)
+      : ''
+    DOMElements.youtubePreview.classList.remove('hidden')
+    DOMElements.filePreview.classList.add('hidden')
+
+    // Auto-switch to parts mode for full coverage of YouTube audio
+    setTranscriptionMode('parts')
+    DOMElements.modePartsRadio.checked = true
+    DOMElements.modeWholeRadio.checked = false
+    DOMElements.chunkDurationGroup.classList.remove('hidden')
+
+    DOMElements.transcribeButton.disabled = false
+    DOMElements.progressMessageElement.textContent = 'Ready to transcribe (parts mode for full coverage).'
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : String(error)
+    showError(`Error fetching YouTube video: ${errorMessage}`)
+  } finally {
+    DOMElements.youtubeFetchButton.disabled = false
+    DOMElements.youtubeFetchButton.textContent = 'Fetch'
   }
 }
 

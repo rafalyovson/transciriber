@@ -1,4 +1,5 @@
 import { ensureDir } from '@std/fs/ensure-dir'
+import { contentType } from '@std/media-types'
 import { extname, join, parse } from '@std/path'
 import { Result } from 'types'
 
@@ -21,10 +22,7 @@ export class FileService {
     this.outputDir = Deno.env.get('OUTPUT_DIR') || join(Deno.cwd(), 'outputs')
     // Keep temp directory in the application directory, not in the output directory
     this.tempDir = join(Deno.cwd(), 'temp')
-    this.combinedOutputFile = join(
-      this.outputDir,
-      'combined_transcription.md',
-    )
+    this.combinedOutputFile = join(this.outputDir, 'combined_transcription.md')
   }
 
   /**
@@ -103,10 +101,10 @@ export class FileService {
   async readAudioFile(fileName: string): Promise<Blob> {
     const filePath = join(this.inputDir, fileName)
     const audioBuffer = await Deno.readFile(filePath)
-    const fileExt = extname(filePath).substring(1)
+    const mimeType = contentType(extname(filePath)) || 'application/octet-stream'
 
     return new Blob([audioBuffer], {
-      type: `audio/${fileExt}`,
+      type: mimeType,
     })
   }
 
@@ -118,11 +116,11 @@ export class FileService {
   async readAudioFileFromPath(filePath: string): Promise<Result<Blob, Error>> {
     try {
       const audioBuffer = await Deno.readFile(filePath)
-      const fileExt = extname(filePath).substring(1)
+      const mimeType = contentType(extname(filePath)) || 'application/octet-stream'
 
       return {
         ok: true,
-        data: new Blob([audioBuffer], { type: `audio/${fileExt}` }),
+        data: new Blob([audioBuffer], { type: mimeType }),
       }
     } catch (error) {
       return {
@@ -139,7 +137,11 @@ export class FileService {
    * @param format - Output format (txt or md)
    * @returns Path to the saved file
    */
-  async saveTranscription(text: string, fileName: string, format = 'txt'): Promise<string> {
+  async saveTranscription(
+    text: string,
+    fileName: string,
+    format = 'txt',
+  ): Promise<string> {
     const baseName = parse(fileName).name
     const outputFileName = `${baseName}.${format}`
     const outputPath = join(this.outputDir, outputFileName)
@@ -165,7 +167,11 @@ export class FileService {
    * @param format - Subtitle format extension
    * @returns Path to the saved subtitle file
    */
-  async saveSubtitle(content: string, fileName: string, format: 'srt' | 'vtt'): Promise<string> {
+  async saveSubtitle(
+    content: string,
+    fileName: string,
+    format: 'srt' | 'vtt',
+  ): Promise<string> {
     const baseName = parse(fileName).name
     const outputFileName = `${baseName}.${format}`
     const outputPath = join(this.outputDir, outputFileName)
@@ -198,7 +204,9 @@ export class FileService {
    */
   private formatAsMarkdown(text: string, title: string): string {
     // Create a title from the filename
-    const formattedTitle = title.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())
+    const formattedTitle = title
+      .replace(/_/g, ' ')
+      .replace(/\b\w/g, (c) => c.toUpperCase())
 
     // Format the text as Markdown
     let markdown = `# Transcription: ${formattedTitle}\n\n`

@@ -80,6 +80,39 @@ type SubtitleGenerationOutput = {
   failureMessage?: string
 }
 
+type SubtitlePersistenceResult = {
+  generated: boolean
+  formats?: Array<'srt' | 'vtt'>
+  paths?: { srt?: string; vtt?: string }
+  cueCount?: number
+  quality?: SubtitleQualityReport
+  violationCount?: number
+  qualityReportPath?: string
+  contents?: { srt?: string; vtt?: string }
+  trackLanguageTag?: string
+  warnings: string[]
+  shouldFail?: boolean
+  failureMessage?: string
+}
+
+/**
+ * Shared context for building TranscriptionResult objects within a single run().
+ */
+type RunContext = {
+  modeRequested: TranscriptionMode
+  modeUsed: TranscriptionMode
+  warnings: string[]
+  mediaKind: InputMediaKind
+  audioExtracted: boolean
+  sourceDurationSec: number
+  onProgress?: (event: TranscriptionProgressEvent) => void
+  progressContext: {
+    modeRequested: TranscriptionMode
+    modeUsed: TranscriptionMode
+    jobId?: string
+  }
+}
+
 /**
  * Result type for the transcription process
  */
@@ -126,9 +159,6 @@ export class TranscriptionApp {
   private readonly chunkDuration: number
   private readonly config: Partial<TranscriptionConfig>
 
-  /**
-   * Creates a new TranscriptionApp instance
-   */
   constructor(config: Partial<TranscriptionConfig> = {}, chunkDuration = 30) {
     this.fileService = new FileService()
     this.audioSplitterService = new AudioSplitterService()
@@ -140,9 +170,6 @@ export class TranscriptionApp {
     this.config = config
   }
 
-  /**
-   * Initializes the application
-   */
   async initialize(): Promise<boolean> {
     const envSetup = setupEnv()
     if (!envSetup) return false
@@ -160,7 +187,9 @@ export class TranscriptionApp {
   }
 
   private isRecoverableWholeModeError(message: string): boolean {
-    return /413|payload|too\s+large|size|timeout|timed\s*out|resource|limit|process/i.test(message)
+    return /413|payload|too\s+large|size|timeout|timed\s*out|resource|limit|process/i.test(
+      message,
+    )
   }
 
   private async waitForRetry(ms: number): Promise<void> {
@@ -168,7 +197,9 @@ export class TranscriptionApp {
   }
 
   private isAsyncWebhookEnabled(): boolean {
-    const raw = (Deno.env.get('ENABLE_ELEVENLABS_ASYNC_WEBHOOK') || '').trim().toLowerCase()
+    const raw = (Deno.env.get('ENABLE_ELEVENLABS_ASYNC_WEBHOOK') || '')
+      .trim()
+      .toLowerCase()
     return raw === '1' || raw === 'true' || raw === 'yes'
   }
 
@@ -184,7 +215,9 @@ export class TranscriptionApp {
 
     if (inspection.mediaKind === 'video' && modeUsed !== 'parts') {
       modeUsed = 'parts'
-      warnings.push('Video inputs are always transcribed in parts mode to guarantee full coverage.')
+      warnings.push(
+        'Video inputs are always transcribed in parts mode to guarantee full coverage.',
+      )
     }
 
     if (exceedsElevenLabsHardLimits(inspection) && modeUsed !== 'parts') {
@@ -195,14 +228,19 @@ export class TranscriptionApp {
     }
 
     if (
-      this.isAsyncWebhookEnabled() && inspection.durationSec >= ASYNC_WEBHOOK_RUNTIME_THRESHOLD_SEC
+      this.isAsyncWebhookEnabled() &&
+      inspection.durationSec >= ASYNC_WEBHOOK_RUNTIME_THRESHOLD_SEC
     ) {
       warnings.push(
         'Async webhook mode flag is enabled for long media. This local build keeps deterministic chunked processing enabled.',
       )
     }
 
-    if (modeUsed === 'parts' && inspection.mediaKind === 'video' && !chunkDurationProvided) {
+    if (
+      modeUsed === 'parts' &&
+      inspection.mediaKind === 'video' &&
+      !chunkDurationProvided
+    ) {
       chunkDuration = FORCED_VIDEO_CHUNK_DURATION_SEC
     }
 
@@ -223,7 +261,9 @@ export class TranscriptionApp {
     if (!audioResult.ok) {
       return {
         ok: false,
-        error: new Error(`Failed to read input audio file: ${audioResult.error.message}`),
+        error: new Error(
+          `Failed to read input audio file: ${audioResult.error.message}`,
+        ),
       }
     }
 
@@ -263,13 +303,17 @@ export class TranscriptionApp {
           progressContext,
         )
       }
-      const audioResult = await this.fileService.readAudioFileFromPath(segment.path)
+      const audioResult = await this.fileService.readAudioFileFromPath(
+        segment.path,
+      )
       if (!audioResult.ok) {
         lastError = new Error(
           `Failed to read chunk ${segment.index + 1}/${totalChunks}: ${audioResult.error.message}`,
         )
       } else {
-        const transcriptionResult = await this.transcriptionService.transcribe(audioResult.data)
+        const transcriptionResult = await this.transcriptionService.transcribe(
+          audioResult.data,
+        )
         if (transcriptionResult.ok) {
           return transcriptionResult
         }
@@ -282,14 +326,15 @@ export class TranscriptionApp {
       }
 
       if (attempt < CHUNK_RETRY_MAX_ATTEMPTS) {
-        const delay = CHUNK_RETRY_BASE_DELAY_MS * (2 ** (attempt - 1))
+        const delay = CHUNK_RETRY_BASE_DELAY_MS * 2 ** (attempt - 1)
         await this.waitForRetry(delay)
       }
     }
 
     return {
       ok: false,
-      error: lastError || new Error(`Chunk ${segment.index + 1}/${totalChunks} failed`),
+      error: lastError ||
+        new Error(`Chunk ${segment.index + 1}/${totalChunks} failed`),
     }
   }
 
@@ -321,7 +366,9 @@ export class TranscriptionApp {
         },
         progressContext,
       )
-      console.log(`Splitting audio file into ${chunkDuration}-second chunks...`)
+      console.log(
+        `Splitting audio file into ${chunkDuration}-second chunks...`,
+      )
       const splitResult = await this.audioSplitterService.splitAudio({
         inputFile: inputFilePath,
         outputDir: tempDir,
@@ -332,7 +379,9 @@ export class TranscriptionApp {
       if (!splitResult.ok) {
         return {
           ok: false,
-          error: new Error(`Failed to split audio file: ${splitResult.error.message}`),
+          error: new Error(
+            `Failed to split audio file: ${splitResult.error.message}`,
+          ),
         }
       }
 
@@ -369,7 +418,9 @@ export class TranscriptionApp {
           },
           progressContext,
         )
-        console.log(`Transcribing chunk ${segment.index + 1}/${totalChunks}...`)
+        console.log(
+          `Transcribing chunk ${segment.index + 1}/${totalChunks}...`,
+        )
 
         const chunkResult = await this.transcribeChunkWithRetry(
           segment,
@@ -389,10 +440,7 @@ export class TranscriptionApp {
         }
 
         chunkTranscriptions.push(chunkResult.data)
-        chunkDetails.push({
-          segment,
-          transcription: chunkResult.data,
-        })
+        chunkDetails.push({ segment, transcription: chunkResult.data })
         transcribedDurationSec += segment.durationSec
         const endPercent = 30 + Math.floor(((segment.index + 1) / totalChunks) * 50)
         this.emitProgress(
@@ -417,7 +465,7 @@ export class TranscriptionApp {
         ok: true,
         data: {
           text: this.fileService.combineChunkTranscriptions(
-            chunkTranscriptions.map((transcription) => transcription.text),
+            chunkTranscriptions.map((t) => t.text),
           ),
           chunks: chunkDetails,
           totalChunks,
@@ -441,9 +489,7 @@ export class TranscriptionApp {
       jobId?: string
     },
   ): void {
-    if (!onProgress) {
-      return
-    }
+    if (!onProgress) return
 
     onProgress({
       ...event,
@@ -486,7 +532,6 @@ export class TranscriptionApp {
         ? subtitleOptions.maxHardViolationRatio
         : SUBTITLE_DEFAULT_HARD_VIOLATION_RATIO
 
-      // Video jobs are business-critical for subtitle output: never disable or relax strict mode.
       return {
         enabled: true,
         strictQuality: true,
@@ -504,54 +549,51 @@ export class TranscriptionApp {
       ? subtitleOptions.maxHardViolationRatio
       : SUBTITLE_DEFAULT_HARD_VIOLATION_RATIO
 
-    return {
-      enabled,
-      strictQuality,
-      maxHardViolationRatio,
-    }
+    return { enabled, strictQuality, maxHardViolationRatio }
   }
 
   private hasRequiredSubtitleArtifacts(
     artifacts: SubtitleArtifacts,
     strictMode: boolean,
   ): boolean {
-    if (!strictMode) {
-      return artifacts.generated
-    }
+    if (!strictMode) return artifacts.generated
 
-    return artifacts.generated &&
+    return (
+      artifacts.generated &&
       artifacts.formats.includes('srt') &&
       artifacts.formats.includes('vtt') &&
       Boolean(artifacts.paths?.srt) &&
       Boolean(artifacts.paths?.vtt)
+    )
   }
 
   private async saveSubtitles(
     fileName: string,
     artifacts: SubtitleArtifacts,
   ): Promise<SubtitleArtifacts> {
-    if (!artifacts.contents) {
-      return artifacts
-    }
+    if (!artifacts.contents) return artifacts
 
     const paths: { srt?: string; vtt?: string } = { ...artifacts.paths }
     if (artifacts.contents.srt) {
-      paths.srt = await this.fileService.saveSubtitle(artifacts.contents.srt, fileName, 'srt')
+      paths.srt = await this.fileService.saveSubtitle(
+        artifacts.contents.srt,
+        fileName,
+        'srt',
+      )
     }
     if (artifacts.contents.vtt) {
-      paths.vtt = await this.fileService.saveSubtitle(artifacts.contents.vtt, fileName, 'vtt')
+      paths.vtt = await this.fileService.saveSubtitle(
+        artifacts.contents.vtt,
+        fileName,
+        'vtt',
+      )
     }
 
-    return {
-      ...artifacts,
-      paths,
-    }
+    return { ...artifacts, paths }
   }
 
   private summarizeViolations(violations: string[], maxItems = 8): string {
-    if (violations.length === 0) {
-      return 'No detailed violations were provided.'
-    }
+    if (violations.length === 0) return 'No detailed violations were provided.'
 
     const head = violations.slice(0, maxItems).join(' ')
     const remaining = violations.length - Math.min(maxItems, violations.length)
@@ -592,19 +634,17 @@ export class TranscriptionApp {
     )
   }
 
-  private buildSubtitles(
-    options: {
-      text: string
-      words: StructuredTranscriptionResult['words']
-      additionalFormats: StructuredTranscriptionResult['additionalFormats']
-      sourceDurationSec: number
-      profile: LanguageSubtitleProfile
-      trackLanguageTag: string
-      chunks?: SubtitleChunkInput[]
-      strictQuality: boolean
-      maxHardViolationRatio: number
-    },
-  ): Result<SubtitleGenerationOutput, Error> {
+  private buildSubtitles(options: {
+    text: string
+    words: StructuredTranscriptionResult['words']
+    additionalFormats: StructuredTranscriptionResult['additionalFormats']
+    sourceDurationSec: number
+    profile: LanguageSubtitleProfile
+    trackLanguageTag: string
+    chunks?: SubtitleChunkInput[]
+    strictQuality: boolean
+    maxHardViolationRatio: number
+  }): Result<SubtitleGenerationOutput, Error> {
     try {
       const built = this.subtitleBuilderService.buildSubtitles({
         text: options.text,
@@ -632,7 +672,9 @@ export class TranscriptionApp {
       const shouldFail = quality.status === 'fail'
       const failureMessage = shouldFail
         ? `Subtitle quality checks failed in strict mode: ${
-          this.summarizeViolations(quality.violations)
+          this.summarizeViolations(
+            quality.violations,
+          )
         }`
         : undefined
 
@@ -648,10 +690,7 @@ export class TranscriptionApp {
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
-      return {
-        ok: false,
-        error: new Error(message),
-      }
+      return { ok: false, error: new Error(message) }
     }
   }
 
@@ -659,14 +698,14 @@ export class TranscriptionApp {
     sourceDurationSec: number,
     transcribedDurationSec: number,
   ): Result<number, Error> {
-    if (!(sourceDurationSec > 0)) {
-      return { ok: true, data: 1 }
-    }
+    if (!(sourceDurationSec > 0)) return { ok: true, data: 1 }
 
     if (!(transcribedDurationSec > 0)) {
       return {
         ok: false,
-        error: new Error('No transcribed duration was recorded for chunked transcription.'),
+        error: new Error(
+          'No transcribed duration was recorded for chunked transcription.',
+        ),
       }
     }
 
@@ -686,11 +725,148 @@ export class TranscriptionApp {
   }
 
   /**
+   * Builds a TranscriptionResult with shared context defaults.
+   * Emits a 'failed' progress event when the result contains an error.
+   */
+  private buildResult(
+    ctx: RunContext,
+    override: Partial<TranscriptionResult>,
+  ): TranscriptionResult {
+    if (override.error) {
+      this.emitProgress(
+        ctx.onProgress,
+        { stage: 'failed', message: override.error, percent: 100 },
+        ctx.progressContext,
+      )
+    }
+
+    return {
+      success: false,
+      isComplete: false,
+      modeRequested: ctx.modeRequested,
+      modeUsed: ctx.modeUsed,
+      fallbackApplied: false,
+      warnings: ctx.warnings,
+      mediaKind: ctx.mediaKind,
+      audioExtracted: ctx.audioExtracted,
+      sourceDurationSec: ctx.sourceDurationSec > 0 ? ctx.sourceDurationSec : undefined,
+      ...override,
+    }
+  }
+
+  private toSubtitleFields(
+    data: SubtitlePersistenceResult,
+  ): Partial<TranscriptionResult> {
+    return {
+      subtitleGenerated: data.generated,
+      subtitleFormats: data.formats,
+      subtitlePaths: data.paths,
+      subtitleCueCount: data.cueCount,
+      subtitleQuality: data.quality,
+      subtitleViolationCount: data.violationCount,
+      subtitleQualityReportPath: data.qualityReportPath,
+      subtitleContents: data.contents,
+      subtitleTrackLanguageTag: data.trackLanguageTag,
+    }
+  }
+
+  /**
+   * Unified subtitle generation, quality evaluation, persistence, and strict-mode gating.
+   * Replaces the three near-identical subtitle blocks that previously existed in run().
+   */
+  private async generateAndPersistSubtitles(params: {
+    text: string
+    words: StructuredTranscriptionResult['words']
+    additionalFormats: StructuredTranscriptionResult['additionalFormats']
+    sourceDurationSec: number
+    chunks?: SubtitleChunkInput[]
+    outputFileLabel: string
+    profile: LanguageSubtitleProfile
+    trackLanguageTag: string
+    runtimeConfig: SubtitleRuntimeConfig
+    modeUsed: TranscriptionMode
+    modeRequested: TranscriptionMode
+    mediaKind: InputMediaKind
+    onProgress?: (event: TranscriptionProgressEvent) => void
+    progressContext: RunContext['progressContext']
+  }): Promise<Result<SubtitlePersistenceResult, Error>> {
+    this.emitProgress(
+      params.onProgress,
+      {
+        stage: 'generating_subtitles',
+        message: 'Generating subtitle sidecars...',
+        percent: 90,
+      },
+      params.progressContext,
+    )
+
+    const buildResult = this.buildSubtitles({
+      text: params.text,
+      words: params.words,
+      additionalFormats: params.additionalFormats,
+      sourceDurationSec: params.sourceDurationSec,
+      profile: params.profile,
+      trackLanguageTag: params.trackLanguageTag,
+      chunks: params.chunks,
+      strictQuality: params.runtimeConfig.strictQuality,
+      maxHardViolationRatio: params.runtimeConfig.maxHardViolationRatio,
+    })
+
+    if (!buildResult.ok) {
+      return { ok: false, error: buildResult.error }
+    }
+
+    const persistedArtifacts = await this.saveSubtitles(
+      params.outputFileLabel,
+      buildResult.data.artifacts,
+    )
+
+    const qualityReportPath = await this.saveSubtitleQualityDiagnostics(
+      params.outputFileLabel,
+      {
+        quality: buildResult.data.quality,
+        warnings: buildResult.data.warnings,
+        artifacts: persistedArtifacts,
+        modeRequested: params.modeRequested,
+        modeUsed: params.modeUsed,
+        mediaKind: params.mediaKind,
+      },
+    )
+
+    const shouldFail = buildResult.data.shouldFail ||
+      (params.runtimeConfig.strictQuality &&
+        !this.hasRequiredSubtitleArtifacts(
+          persistedArtifacts,
+          params.runtimeConfig.strictQuality,
+        ))
+
+    const failureMessage = buildResult.data.shouldFail
+      ? buildResult.data.failureMessage ||
+        'Subtitle quality checks failed in strict mode.'
+      : shouldFail
+      ? 'Strict subtitle mode requires generated SRT and VTT sidecars.'
+      : undefined
+
+    const result: SubtitlePersistenceResult = {
+      generated: persistedArtifacts.generated,
+      formats: persistedArtifacts.formats as Array<'srt' | 'vtt'>,
+      paths: persistedArtifacts.paths,
+      cueCount: persistedArtifacts.cueCount,
+      quality: buildResult.data.quality,
+      violationCount: buildResult.data.quality.violations.length,
+      qualityReportPath,
+      contents: persistedArtifacts.contents,
+      trackLanguageTag: persistedArtifacts.trackLanguageTag || params.trackLanguageTag,
+      warnings: buildResult.data.warnings,
+      shouldFail,
+      failureMessage,
+    }
+
+    return { ok: true, data: result }
+  }
+
+  /**
    * Runs the transcription process
-   * @param inputFilePath - Path to the input media file
-   * @param outputDir - Optional output directory for the transcription
-   * @param options - Transcription mode and chunk options
-   * @returns A TranscriptionResult object
    */
   async run(
     inputFilePath: string,
@@ -702,24 +878,29 @@ export class TranscriptionApp {
     const normalizedChunkDuration = this.normalizeChunkDuration(
       options.chunkDuration ?? this.chunkDuration,
     )
-    let modeUsed: TranscriptionMode = requestedMode
-    const outputFileName = options.outputFileName
-    const outputFileLabel = outputFileName || inputFilePath.split('/').pop() || 'transcription'
-    const mimeTypeHint = options.mimeTypeHint
-    const subtitleOptions = options.subtitleOptions
+    const outputFileLabel = options.outputFileName ||
+      inputFilePath.split('/').pop() ||
+      'transcription'
     const onProgress = options.onProgress
     const progressContext = {
       modeRequested: requestedMode,
-      modeUsed,
+      modeUsed: requestedMode,
       jobId: options.jobId,
     }
 
-    let mediaKind: InputMediaKind = 'audio'
-    let audioExtracted = false
-    let warnings: string[] = []
+    const ctx: RunContext = {
+      modeRequested: requestedMode,
+      modeUsed: requestedMode,
+      warnings: [],
+      mediaKind: 'audio',
+      audioExtracted: false,
+      sourceDurationSec: 0,
+      onProgress,
+      progressContext,
+    }
+
     let cleanupPaths: string[] = []
     let preparedInputPath = inputFilePath
-    let sourceDurationSec = 0
     let subtitleProfile: LanguageSubtitleProfile | null = null
     let subtitleTrackLanguageTag: string | undefined
     let subtitleRuntimeConfig: SubtitleRuntimeConfig = {
@@ -727,61 +908,19 @@ export class TranscriptionApp {
       strictQuality: false,
       maxHardViolationRatio: SUBTITLE_DEFAULT_HARD_VIOLATION_RATIO,
     }
-    let subtitleGenerated = false
-    let subtitleFormats: Array<'srt' | 'vtt'> | undefined
-    let subtitlePaths: { srt?: string; vtt?: string } | undefined
-    let subtitleCueCount: number | undefined
-    let subtitleQuality: SubtitleQualityReport | undefined
-    let subtitleViolationCount: number | undefined
-    let subtitleQualityReportPath: string | undefined
-    let subtitleContents: { srt?: string; vtt?: string } | undefined
 
     try {
       if (!this.transcriptionService) {
-        this.emitProgress(
-          onProgress,
-          {
-            stage: 'failed',
-            message: 'Transcription service is not initialized.',
-            percent: 100,
-          },
-          progressContext,
-        )
-        return {
-          success: false,
+        return this.buildResult(ctx, {
           error: 'TranscriptionService not initialized. Call initialize() first.',
-          modeRequested: requestedMode,
-          modeUsed,
-          fallbackApplied: false,
-          warnings,
-          mediaKind,
-          audioExtracted,
-          isComplete: false,
-        }
+        })
       }
 
       const fileExists = await this.fileService.fileExists(inputFilePath)
       if (!fileExists) {
-        this.emitProgress(
-          onProgress,
-          {
-            stage: 'failed',
-            message: `Input file not found: ${inputFilePath}`,
-            percent: 100,
-          },
-          progressContext,
-        )
-        return {
-          success: false,
+        return this.buildResult(ctx, {
           error: `Input file not found: ${inputFilePath}`,
-          modeRequested: requestedMode,
-          modeUsed,
-          fallbackApplied: false,
-          warnings,
-          mediaKind,
-          audioExtracted,
-          isComplete: false,
-        }
+        })
       }
 
       console.log(`Processing: ${inputFilePath}`)
@@ -802,57 +941,23 @@ export class TranscriptionApp {
 
       const sourceInspectionResult = await this.mediaInspectorService.inspectMedia({
         filePath: inputFilePath,
-        mimeTypeHint,
+        mimeTypeHint: options.mimeTypeHint,
       })
       if (!sourceInspectionResult.ok) {
-        this.emitProgress(
-          onProgress,
-          {
-            stage: 'failed',
-            message: sourceInspectionResult.error.message,
-            percent: 100,
-          },
-          progressContext,
-        )
-        return {
-          success: false,
+        return this.buildResult(ctx, {
           error: sourceInspectionResult.error.message,
-          modeRequested: requestedMode,
-          modeUsed,
-          fallbackApplied: false,
-          warnings,
-          mediaKind,
-          audioExtracted,
-          isComplete: false,
-        }
+        })
       }
 
       const sourceInspection = sourceInspectionResult.data
-      mediaKind = sourceInspection.mediaKind
-      sourceDurationSec = sourceInspection.durationSec
+      ctx.mediaKind = sourceInspection.mediaKind
+      ctx.sourceDurationSec = sourceInspection.durationSec
 
       if (!sourceInspection.hasAudio) {
-        this.emitProgress(
-          onProgress,
-          {
-            stage: 'failed',
-            message: 'Input media has no audio stream.',
-            percent: 100,
-          },
-          progressContext,
-        )
-        return {
-          success: false,
+        return this.buildResult(ctx, {
           error:
             'Input media has no audio stream. Please provide a media file that contains audible content.',
-          modeRequested: requestedMode,
-          modeUsed,
-          fallbackApplied: false,
-          warnings,
-          mediaKind,
-          audioExtracted,
-          isComplete: false,
-        }
+        })
       }
 
       const routing = this.resolveModeRouting(
@@ -861,9 +966,9 @@ export class TranscriptionApp {
         normalizedChunkDuration,
         chunkDurationProvided,
       )
-      modeUsed = routing.modeUsed
-      progressContext.modeUsed = modeUsed
-      warnings = [...warnings, ...routing.warnings]
+      ctx.modeUsed = routing.modeUsed
+      progressContext.modeUsed = routing.modeUsed
+      ctx.warnings = [...ctx.warnings, ...routing.warnings]
 
       this.emitProgress(
         onProgress,
@@ -880,36 +985,18 @@ export class TranscriptionApp {
       const preparationResult = await this.mediaPreprocessorService.prepareInputForTranscription({
         inputPath: inputFilePath,
         tempDir: this.fileService.getTempDir(),
-        mimeTypeHint,
+        mimeTypeHint: options.mimeTypeHint,
       })
-
       if (!preparationResult.ok) {
-        this.emitProgress(
-          onProgress,
-          {
-            stage: 'failed',
-            message: preparationResult.error.message,
-            percent: 100,
-          },
-          progressContext,
-        )
-        return {
-          success: false,
+        return this.buildResult(ctx, {
           error: preparationResult.error.message,
-          modeRequested: requestedMode,
-          modeUsed,
-          fallbackApplied: false,
-          warnings,
-          mediaKind,
-          audioExtracted,
-          isComplete: false,
-        }
+        })
       }
 
       preparedInputPath = preparationResult.data.preparedFilePath
-      mediaKind = preparationResult.data.mediaKind
-      audioExtracted = preparationResult.data.audioExtracted
-      warnings = [...warnings, ...preparationResult.data.warnings]
+      ctx.mediaKind = preparationResult.data.mediaKind
+      ctx.audioExtracted = preparationResult.data.audioExtracted
+      ctx.warnings = [...ctx.warnings, ...preparationResult.data.warnings]
       cleanupPaths = preparationResult.data.cleanupPaths
 
       if (preparedInputPath !== inputFilePath) {
@@ -917,371 +1004,62 @@ export class TranscriptionApp {
           filePath: preparedInputPath,
         })
         if (!preparedInspectionResult.ok) {
-          this.emitProgress(
-            onProgress,
-            {
-              stage: 'failed',
-              message: preparedInspectionResult.error.message,
-              percent: 100,
-            },
-            progressContext,
-          )
-          return {
-            success: false,
+          return this.buildResult(ctx, {
             error: preparedInspectionResult.error.message,
-            modeRequested: requestedMode,
-            modeUsed,
-            fallbackApplied: false,
-            warnings,
-            mediaKind,
-            audioExtracted,
-            isComplete: false,
-          }
+          })
         }
-
         if (!preparedInspectionResult.data.hasAudio) {
-          this.emitProgress(
-            onProgress,
-            {
-              stage: 'failed',
-              message: 'Prepared media has no audio stream.',
-              percent: 100,
-            },
-            progressContext,
-          )
-          return {
-            success: false,
+          return this.buildResult(ctx, {
             error: 'Prepared media has no audio stream.',
-            modeRequested: requestedMode,
-            modeUsed,
-            fallbackApplied: false,
-            warnings,
-            mediaKind,
-            audioExtracted,
-            isComplete: false,
-          }
+          })
         }
-
         if (preparedInspectionResult.data.durationSec > 0) {
-          sourceDurationSec = preparedInspectionResult.data.durationSec
+          ctx.sourceDurationSec = preparedInspectionResult.data.durationSec
         }
       }
 
       const currentLanguageCode = this.transcriptionService.getConfig().languageCode
       const profileSelection = resolveSubtitleProfile({
         languageCode: currentLanguageCode,
-        profileId: subtitleOptions?.profile,
-        trackLanguageTag: subtitleOptions?.trackLanguageTag,
+        profileId: options.subtitleOptions?.profile,
+        trackLanguageTag: options.subtitleOptions?.trackLanguageTag,
       })
       subtitleProfile = profileSelection.profile
       subtitleTrackLanguageTag = profileSelection.trackLanguageTag
-      warnings = [...warnings, ...profileSelection.warnings]
+      ctx.warnings = [...ctx.warnings, ...profileSelection.warnings]
 
       const normalizedSttLanguageCode = resolveSttLanguageCode(currentLanguageCode)
       const resolvedKeyterms = resolveSubtitleKeyterms(
         subtitleProfile,
-        subtitleOptions?.keyterms || [],
+        options.subtitleOptions?.keyterms || [],
       )
       this.transcriptionService.updateConfig({
         languageCode: normalizedSttLanguageCode,
         keyterms: resolvedKeyterms,
       })
 
-      subtitleRuntimeConfig = this.resolveSubtitleRuntimeConfig(mediaKind, subtitleOptions)
+      subtitleRuntimeConfig = this.resolveSubtitleRuntimeConfig(
+        ctx.mediaKind,
+        options.subtitleOptions,
+      )
 
-      if (modeUsed === 'parts') {
-        const partsResult = await this.transcribeInParts(
+      // ── Parts mode ──────────────────────────────────────────────────
+
+      if (ctx.modeUsed === 'parts') {
+        return await this.runPartsMode(
+          ctx,
           preparedInputPath,
-          routing.chunkDuration,
-          onProgress,
-          progressContext,
-        )
-        if (!partsResult.ok) {
-          this.emitProgress(
-            onProgress,
-            {
-              stage: 'failed',
-              message: partsResult.error.message,
-              percent: 100,
-            },
-            progressContext,
-          )
-          return {
-            success: false,
-            error: partsResult.error.message,
-            modeRequested: requestedMode,
-            modeUsed: 'parts',
-            fallbackApplied: false,
-            warnings,
-            mediaKind,
-            audioExtracted,
-            isComplete: false,
-          }
-        }
-
-        const expectedDurationSec = sourceDurationSec > 0
-          ? sourceDurationSec
-          : partsResult.data.totalPlannedDurationSec
-        const coverageResult = this.verifyCoverage(
-          expectedDurationSec,
-          partsResult.data.transcribedDurationSec,
-        )
-        if (!coverageResult.ok) {
-          this.emitProgress(
-            onProgress,
-            {
-              stage: 'failed',
-              message: coverageResult.error.message,
-              percent: 100,
-            },
-            progressContext,
-          )
-          return {
-            success: false,
-            error: coverageResult.error.message,
-            modeRequested: requestedMode,
-            modeUsed: 'parts',
-            fallbackApplied: false,
-            warnings,
-            mediaKind,
-            audioExtracted,
-            isComplete: false,
-            totalChunks: partsResult.data.totalChunks,
-            successfulChunks: partsResult.data.successfulChunks,
-            failedChunks: partsResult.data.failedChunks,
-            sourceDurationSec: expectedDurationSec,
-            transcribedDurationSec: partsResult.data.transcribedDurationSec,
-            coverageRatio: expectedDurationSec > 0
-              ? partsResult.data.transcribedDurationSec / expectedDurationSec
-              : 1,
-          }
-        }
-
-        if (subtitleRuntimeConfig.enabled) {
-          this.emitProgress(
-            onProgress,
-            {
-              stage: 'generating_subtitles',
-              message: 'Generating subtitle sidecars...',
-              percent: 90,
-            },
-            progressContext,
-          )
-
-          const activeProfile = subtitleProfile ||
-            resolveSubtitleProfile({ languageCode: 'en' }).profile
-          const chunkInputs: SubtitleChunkInput[] = partsResult.data.chunks.map((chunk) => ({
-            startSec: chunk.segment.startSec,
-            durationSec: chunk.segment.durationSec,
-            text: chunk.transcription.text,
-            words: chunk.transcription.words,
-            additionalFormats: chunk.transcription.additionalFormats,
-          }))
-          const subtitleBuildResult = this.buildSubtitles({
-            text: partsResult.data.text,
-            words: [],
-            additionalFormats: [],
-            sourceDurationSec: expectedDurationSec,
-            profile: activeProfile,
-            trackLanguageTag: subtitleTrackLanguageTag || activeProfile.defaultTrackLanguageTag,
-            chunks: chunkInputs,
-            strictQuality: subtitleRuntimeConfig.strictQuality,
-            maxHardViolationRatio: subtitleRuntimeConfig.maxHardViolationRatio,
-          })
-
-          if (!subtitleBuildResult.ok) {
-            this.emitProgress(
-              onProgress,
-              {
-                stage: 'failed',
-                message: subtitleBuildResult.error.message,
-                percent: 100,
-              },
-              progressContext,
-            )
-            return {
-              success: false,
-              error: subtitleBuildResult.error.message,
-              modeRequested: requestedMode,
-              modeUsed: 'parts',
-              fallbackApplied: false,
-              warnings,
-              mediaKind,
-              audioExtracted,
-              isComplete: false,
-              totalChunks: partsResult.data.totalChunks,
-              successfulChunks: partsResult.data.successfulChunks,
-              failedChunks: partsResult.data.failedChunks,
-              sourceDurationSec: expectedDurationSec,
-              transcribedDurationSec: partsResult.data.transcribedDurationSec,
-              coverageRatio: coverageResult.data,
-            }
-          }
-
-          warnings = [...warnings, ...subtitleBuildResult.data.warnings]
-          const persistedArtifacts = await this.saveSubtitles(
-            outputFileLabel,
-            subtitleBuildResult.data.artifacts,
-          )
-
-          subtitleGenerated = persistedArtifacts.generated
-          subtitleFormats = persistedArtifacts.formats as Array<'srt' | 'vtt'>
-          subtitlePaths = persistedArtifacts.paths
-          subtitleCueCount = persistedArtifacts.cueCount
-          subtitleQuality = subtitleBuildResult.data.quality
-          subtitleViolationCount = subtitleBuildResult.data.quality.violations.length
-          subtitleContents = persistedArtifacts.contents
-          subtitleTrackLanguageTag = persistedArtifacts.trackLanguageTag || subtitleTrackLanguageTag
-          subtitleQualityReportPath = await this.saveSubtitleQualityDiagnostics(
-            outputFileLabel,
-            {
-              quality: subtitleBuildResult.data.quality,
-              warnings: subtitleBuildResult.data.warnings,
-              artifacts: persistedArtifacts,
-              modeRequested: requestedMode,
-              modeUsed: 'parts',
-              mediaKind,
-            },
-          )
-
-          if (subtitleBuildResult.data.shouldFail) {
-            const failureMessage = subtitleBuildResult.data.failureMessage ||
-              'Subtitle quality checks failed in strict mode.'
-            this.emitProgress(
-              onProgress,
-              {
-                stage: 'failed',
-                message: failureMessage,
-                percent: 100,
-              },
-              progressContext,
-            )
-            return {
-              success: false,
-              error: failureMessage,
-              modeRequested: requestedMode,
-              modeUsed: 'parts',
-              fallbackApplied: false,
-              warnings,
-              mediaKind,
-              audioExtracted,
-              isComplete: false,
-              totalChunks: partsResult.data.totalChunks,
-              successfulChunks: partsResult.data.successfulChunks,
-              failedChunks: partsResult.data.failedChunks,
-              sourceDurationSec: expectedDurationSec,
-              transcribedDurationSec: partsResult.data.transcribedDurationSec,
-              coverageRatio: coverageResult.data,
-              subtitleGenerated,
-              subtitleFormats,
-              subtitlePaths,
-              subtitleCueCount,
-              subtitleQuality,
-              subtitleViolationCount,
-              subtitleQualityReportPath,
-              subtitleContents,
-              subtitleTrackLanguageTag,
-            }
-          }
-
-          if (
-            subtitleRuntimeConfig.strictQuality &&
-            !this.hasRequiredSubtitleArtifacts(
-              persistedArtifacts,
-              subtitleRuntimeConfig.strictQuality,
-            )
-          ) {
-            this.emitProgress(
-              onProgress,
-              {
-                stage: 'failed',
-                message: 'Strict subtitle mode requires generated SRT and VTT sidecars.',
-                percent: 100,
-              },
-              progressContext,
-            )
-            return {
-              success: false,
-              error: 'Strict subtitle mode requires generated SRT and VTT sidecars.',
-              modeRequested: requestedMode,
-              modeUsed: 'parts',
-              fallbackApplied: false,
-              warnings,
-              mediaKind,
-              audioExtracted,
-              isComplete: false,
-              totalChunks: partsResult.data.totalChunks,
-              successfulChunks: partsResult.data.successfulChunks,
-              failedChunks: partsResult.data.failedChunks,
-              sourceDurationSec: expectedDurationSec,
-              transcribedDurationSec: partsResult.data.transcribedDurationSec,
-              coverageRatio: coverageResult.data,
-            }
-          }
-        }
-
-        this.emitProgress(
-          onProgress,
-          {
-            stage: 'combining_chunks',
-            message: 'Combining chunk transcripts...',
-            percent: 85,
-          },
-          progressContext,
-        )
-        const outputPath = await this.saveTranscript(
           inputFilePath,
-          partsResult.data.text,
           outputFileLabel,
-        )
-
-        this.emitProgress(
-          onProgress,
-          {
-            stage: 'saving_output',
-            message: 'Saving transcript output...',
-            percent: 95,
-          },
-          progressContext,
-        )
-
-        this.emitProgress(
-          onProgress,
-          {
-            stage: 'completed',
-            message: 'Transcription completed.',
-            percent: 100,
-          },
-          progressContext,
-        )
-        return {
-          success: true,
-          data: partsResult.data.text,
-          outputPath,
-          modeRequested: requestedMode,
-          modeUsed: 'parts',
-          fallbackApplied: false,
-          warnings,
-          mediaKind,
-          audioExtracted,
-          isComplete: true,
-          totalChunks: partsResult.data.totalChunks,
-          successfulChunks: partsResult.data.successfulChunks,
-          failedChunks: partsResult.data.failedChunks,
-          sourceDurationSec: expectedDurationSec,
-          transcribedDurationSec: partsResult.data.transcribedDurationSec,
-          coverageRatio: coverageResult.data,
-          subtitleGenerated,
-          subtitleFormats,
-          subtitlePaths,
-          subtitleCueCount,
-          subtitleQuality,
-          subtitleViolationCount,
-          subtitleQualityReportPath,
-          subtitleContents,
+          routing.chunkDuration,
+          subtitleRuntimeConfig,
+          subtitleProfile,
           subtitleTrackLanguageTag,
-        }
+          false,
+        )
       }
+
+      // ── Whole mode ──────────────────────────────────────────────────
 
       this.emitProgress(
         onProgress,
@@ -1293,569 +1071,308 @@ export class TranscriptionApp {
         progressContext,
       )
       const wholeResult = await this.transcribeWholeFile(preparedInputPath)
+
       if (wholeResult.ok) {
-        if (subtitleRuntimeConfig.enabled) {
-          this.emitProgress(
-            onProgress,
-            {
-              stage: 'generating_subtitles',
-              message: 'Generating subtitle sidecars...',
-              percent: 90,
-            },
-            progressContext,
-          )
-
-          const activeProfile = subtitleProfile ||
-            resolveSubtitleProfile({ languageCode: 'en' }).profile
-          const subtitleBuildResult = this.buildSubtitles({
-            text: wholeResult.data.text,
-            words: wholeResult.data.words,
-            additionalFormats: wholeResult.data.additionalFormats,
-            sourceDurationSec: sourceDurationSec,
-            profile: activeProfile,
-            trackLanguageTag: subtitleTrackLanguageTag || activeProfile.defaultTrackLanguageTag,
-            strictQuality: subtitleRuntimeConfig.strictQuality,
-            maxHardViolationRatio: subtitleRuntimeConfig.maxHardViolationRatio,
-          })
-
-          if (!subtitleBuildResult.ok) {
-            this.emitProgress(
-              onProgress,
-              {
-                stage: 'failed',
-                message: subtitleBuildResult.error.message,
-                percent: 100,
-              },
-              progressContext,
-            )
-            return {
-              success: false,
-              error: subtitleBuildResult.error.message,
-              modeRequested: requestedMode,
-              modeUsed: 'whole',
-              fallbackApplied: false,
-              warnings,
-              mediaKind,
-              audioExtracted,
-              isComplete: false,
-              sourceDurationSec: sourceDurationSec > 0 ? sourceDurationSec : undefined,
-            }
-          }
-
-          warnings = [...warnings, ...subtitleBuildResult.data.warnings]
-          const persistedArtifacts = await this.saveSubtitles(
-            outputFileLabel,
-            subtitleBuildResult.data.artifacts,
-          )
-          subtitleGenerated = persistedArtifacts.generated
-          subtitleFormats = persistedArtifacts.formats as Array<'srt' | 'vtt'>
-          subtitlePaths = persistedArtifacts.paths
-          subtitleCueCount = persistedArtifacts.cueCount
-          subtitleQuality = subtitleBuildResult.data.quality
-          subtitleViolationCount = subtitleBuildResult.data.quality.violations.length
-          subtitleContents = persistedArtifacts.contents
-          subtitleTrackLanguageTag = persistedArtifacts.trackLanguageTag || subtitleTrackLanguageTag
-          subtitleQualityReportPath = await this.saveSubtitleQualityDiagnostics(
-            outputFileLabel,
-            {
-              quality: subtitleBuildResult.data.quality,
-              warnings: subtitleBuildResult.data.warnings,
-              artifacts: persistedArtifacts,
-              modeRequested: requestedMode,
-              modeUsed: 'whole',
-              mediaKind,
-            },
-          )
-
-          if (subtitleBuildResult.data.shouldFail) {
-            const failureMessage = subtitleBuildResult.data.failureMessage ||
-              'Subtitle quality checks failed in strict mode.'
-            this.emitProgress(
-              onProgress,
-              {
-                stage: 'failed',
-                message: failureMessage,
-                percent: 100,
-              },
-              progressContext,
-            )
-            return {
-              success: false,
-              error: failureMessage,
-              modeRequested: requestedMode,
-              modeUsed: 'whole',
-              fallbackApplied: false,
-              warnings,
-              mediaKind,
-              audioExtracted,
-              isComplete: false,
-              sourceDurationSec: sourceDurationSec > 0 ? sourceDurationSec : undefined,
-              subtitleGenerated,
-              subtitleFormats,
-              subtitlePaths,
-              subtitleCueCount,
-              subtitleQuality,
-              subtitleViolationCount,
-              subtitleQualityReportPath,
-              subtitleContents,
-              subtitleTrackLanguageTag,
-            }
-          }
-
-          if (
-            subtitleRuntimeConfig.strictQuality &&
-            !this.hasRequiredSubtitleArtifacts(
-              persistedArtifacts,
-              subtitleRuntimeConfig.strictQuality,
-            )
-          ) {
-            this.emitProgress(
-              onProgress,
-              {
-                stage: 'failed',
-                message: 'Strict subtitle mode requires generated SRT and VTT sidecars.',
-                percent: 100,
-              },
-              progressContext,
-            )
-            return {
-              success: false,
-              error: 'Strict subtitle mode requires generated SRT and VTT sidecars.',
-              modeRequested: requestedMode,
-              modeUsed: 'whole',
-              fallbackApplied: false,
-              warnings,
-              mediaKind,
-              audioExtracted,
-              isComplete: false,
-              sourceDurationSec: sourceDurationSec > 0 ? sourceDurationSec : undefined,
-            }
-          }
-        }
-
-        this.emitProgress(
-          onProgress,
-          {
-            stage: 'saving_output',
-            message: 'Saving transcript output...',
-            percent: 95,
-          },
-          progressContext,
-        )
-        const outputPath = await this.saveTranscript(
+        return await this.finishWholeMode(
+          ctx,
+          wholeResult.data,
           inputFilePath,
-          wholeResult.data.text,
           outputFileLabel,
-        )
-
-        this.emitProgress(
-          onProgress,
-          {
-            stage: 'completed',
-            message: 'Transcription completed.',
-            percent: 100,
-          },
-          progressContext,
-        )
-        return {
-          success: true,
-          data: wholeResult.data.text,
-          outputPath,
-          modeRequested: requestedMode,
-          modeUsed: 'whole',
-          fallbackApplied: false,
-          warnings,
-          mediaKind,
-          audioExtracted,
-          isComplete: true,
-          sourceDurationSec: sourceDurationSec > 0 ? sourceDurationSec : undefined,
-          subtitleGenerated,
-          subtitleFormats,
-          subtitlePaths,
-          subtitleCueCount,
-          subtitleQuality,
-          subtitleViolationCount,
-          subtitleQualityReportPath,
-          subtitleContents,
+          subtitleRuntimeConfig,
+          subtitleProfile,
           subtitleTrackLanguageTag,
-        }
+        )
       }
+
+      // ── Fallback to parts ───────────────────────────────────────────
 
       const wholeErrorMessage = wholeResult.error.message
       if (!this.isRecoverableWholeModeError(wholeErrorMessage)) {
-        this.emitProgress(
-          onProgress,
-          {
-            stage: 'failed',
-            message: wholeErrorMessage,
-            percent: 100,
-          },
-          progressContext,
-        )
-        return {
-          success: false,
-          error: wholeErrorMessage,
-          modeRequested: requestedMode,
-          modeUsed: 'whole',
-          fallbackApplied: false,
-          warnings,
-          mediaKind,
-          audioExtracted,
-          isComplete: false,
-          sourceDurationSec: sourceDurationSec > 0 ? sourceDurationSec : undefined,
-        }
+        return this.buildResult(ctx, { error: wholeErrorMessage })
       }
 
       const fallbackWarning =
         `Whole-file transcription failed (${wholeErrorMessage}). Automatically retrying in parts.`
       console.warn(fallbackWarning)
-      const fallbackWarnings = [...warnings, fallbackWarning]
+      ctx.warnings = [...ctx.warnings, fallbackWarning]
+      ctx.modeUsed = 'parts'
       progressContext.modeUsed = 'parts'
       this.emitProgress(
         onProgress,
-        {
-          stage: 'splitting',
-          message: fallbackWarning,
-          percent: 25,
-        },
+        { stage: 'splitting', message: fallbackWarning, percent: 25 },
         progressContext,
       )
 
-      const fallbackResult = await this.transcribeInParts(
+      return await this.runPartsMode(
+        ctx,
         preparedInputPath,
-        routing.chunkDuration,
-        onProgress,
-        progressContext,
-      )
-      if (!fallbackResult.ok) {
-        this.emitProgress(
-          onProgress,
-          {
-            stage: 'failed',
-            message: `${wholeErrorMessage}. Fallback failed: ${fallbackResult.error.message}`,
-            percent: 100,
-          },
-          progressContext,
-        )
-        return {
-          success: false,
-          error: `${wholeErrorMessage}. Fallback failed: ${fallbackResult.error.message}`,
-          modeRequested: requestedMode,
-          modeUsed: 'parts',
-          fallbackApplied: true,
-          warnings: fallbackWarnings,
-          mediaKind,
-          audioExtracted,
-          isComplete: false,
-          sourceDurationSec: sourceDurationSec > 0 ? sourceDurationSec : undefined,
-        }
-      }
-
-      const expectedDurationSec = sourceDurationSec > 0
-        ? sourceDurationSec
-        : fallbackResult.data.totalPlannedDurationSec
-      const coverageResult = this.verifyCoverage(
-        expectedDurationSec,
-        fallbackResult.data.transcribedDurationSec,
-      )
-      if (!coverageResult.ok) {
-        this.emitProgress(
-          onProgress,
-          {
-            stage: 'failed',
-            message: coverageResult.error.message,
-            percent: 100,
-          },
-          progressContext,
-        )
-        return {
-          success: false,
-          error: coverageResult.error.message,
-          modeRequested: requestedMode,
-          modeUsed: 'parts',
-          fallbackApplied: true,
-          warnings: fallbackWarnings,
-          mediaKind,
-          audioExtracted,
-          isComplete: false,
-          totalChunks: fallbackResult.data.totalChunks,
-          successfulChunks: fallbackResult.data.successfulChunks,
-          failedChunks: fallbackResult.data.failedChunks,
-          sourceDurationSec: expectedDurationSec,
-          transcribedDurationSec: fallbackResult.data.transcribedDurationSec,
-          coverageRatio: expectedDurationSec > 0
-            ? fallbackResult.data.transcribedDurationSec / expectedDurationSec
-            : 1,
-        }
-      }
-
-      if (subtitleRuntimeConfig.enabled) {
-        this.emitProgress(
-          onProgress,
-          {
-            stage: 'generating_subtitles',
-            message: 'Generating subtitle sidecars...',
-            percent: 90,
-          },
-          progressContext,
-        )
-
-        const activeProfile = subtitleProfile ||
-          resolveSubtitleProfile({ languageCode: 'en' }).profile
-        const chunkInputs: SubtitleChunkInput[] = fallbackResult.data.chunks.map((chunk) => ({
-          startSec: chunk.segment.startSec,
-          durationSec: chunk.segment.durationSec,
-          text: chunk.transcription.text,
-          words: chunk.transcription.words,
-          additionalFormats: chunk.transcription.additionalFormats,
-        }))
-        const subtitleBuildResult = this.buildSubtitles({
-          text: fallbackResult.data.text,
-          words: [],
-          additionalFormats: [],
-          sourceDurationSec: expectedDurationSec,
-          profile: activeProfile,
-          trackLanguageTag: subtitleTrackLanguageTag || activeProfile.defaultTrackLanguageTag,
-          chunks: chunkInputs,
-          strictQuality: subtitleRuntimeConfig.strictQuality,
-          maxHardViolationRatio: subtitleRuntimeConfig.maxHardViolationRatio,
-        })
-
-        if (!subtitleBuildResult.ok) {
-          this.emitProgress(
-            onProgress,
-            {
-              stage: 'failed',
-              message: subtitleBuildResult.error.message,
-              percent: 100,
-            },
-            progressContext,
-          )
-          return {
-            success: false,
-            error: subtitleBuildResult.error.message,
-            modeRequested: requestedMode,
-            modeUsed: 'parts',
-            fallbackApplied: true,
-            warnings: fallbackWarnings,
-            mediaKind,
-            audioExtracted,
-            isComplete: false,
-            totalChunks: fallbackResult.data.totalChunks,
-            successfulChunks: fallbackResult.data.successfulChunks,
-            failedChunks: fallbackResult.data.failedChunks,
-            sourceDurationSec: expectedDurationSec,
-            transcribedDurationSec: fallbackResult.data.transcribedDurationSec,
-            coverageRatio: coverageResult.data,
-          }
-        }
-
-        warnings = [...fallbackWarnings, ...subtitleBuildResult.data.warnings]
-        const persistedArtifacts = await this.saveSubtitles(
-          outputFileLabel,
-          subtitleBuildResult.data.artifacts,
-        )
-        subtitleGenerated = persistedArtifacts.generated
-        subtitleFormats = persistedArtifacts.formats as Array<'srt' | 'vtt'>
-        subtitlePaths = persistedArtifacts.paths
-        subtitleCueCount = persistedArtifacts.cueCount
-        subtitleQuality = subtitleBuildResult.data.quality
-        subtitleViolationCount = subtitleBuildResult.data.quality.violations.length
-        subtitleContents = persistedArtifacts.contents
-        subtitleTrackLanguageTag = persistedArtifacts.trackLanguageTag || subtitleTrackLanguageTag
-        subtitleQualityReportPath = await this.saveSubtitleQualityDiagnostics(
-          outputFileLabel,
-          {
-            quality: subtitleBuildResult.data.quality,
-            warnings: subtitleBuildResult.data.warnings,
-            artifacts: persistedArtifacts,
-            modeRequested: requestedMode,
-            modeUsed: 'parts',
-            mediaKind,
-          },
-        )
-
-        if (subtitleBuildResult.data.shouldFail) {
-          const failureMessage = subtitleBuildResult.data.failureMessage ||
-            'Subtitle quality checks failed in strict mode.'
-          this.emitProgress(
-            onProgress,
-            {
-              stage: 'failed',
-              message: failureMessage,
-              percent: 100,
-            },
-            progressContext,
-          )
-          return {
-            success: false,
-            error: failureMessage,
-            modeRequested: requestedMode,
-            modeUsed: 'parts',
-            fallbackApplied: true,
-            warnings,
-            mediaKind,
-            audioExtracted,
-            isComplete: false,
-            totalChunks: fallbackResult.data.totalChunks,
-            successfulChunks: fallbackResult.data.successfulChunks,
-            failedChunks: fallbackResult.data.failedChunks,
-            sourceDurationSec: expectedDurationSec,
-            transcribedDurationSec: fallbackResult.data.transcribedDurationSec,
-            coverageRatio: coverageResult.data,
-            subtitleGenerated,
-            subtitleFormats,
-            subtitlePaths,
-            subtitleCueCount,
-            subtitleQuality,
-            subtitleViolationCount,
-            subtitleQualityReportPath,
-            subtitleContents,
-            subtitleTrackLanguageTag,
-          }
-        }
-
-        if (
-          subtitleRuntimeConfig.strictQuality &&
-          !this.hasRequiredSubtitleArtifacts(
-            persistedArtifacts,
-            subtitleRuntimeConfig.strictQuality,
-          )
-        ) {
-          this.emitProgress(
-            onProgress,
-            {
-              stage: 'failed',
-              message: 'Strict subtitle mode requires generated SRT and VTT sidecars.',
-              percent: 100,
-            },
-            progressContext,
-          )
-          return {
-            success: false,
-            error: 'Strict subtitle mode requires generated SRT and VTT sidecars.',
-            modeRequested: requestedMode,
-            modeUsed: 'parts',
-            fallbackApplied: true,
-            warnings,
-            mediaKind,
-            audioExtracted,
-            isComplete: false,
-            totalChunks: fallbackResult.data.totalChunks,
-            successfulChunks: fallbackResult.data.successfulChunks,
-            failedChunks: fallbackResult.data.failedChunks,
-            sourceDurationSec: expectedDurationSec,
-            transcribedDurationSec: fallbackResult.data.transcribedDurationSec,
-            coverageRatio: coverageResult.data,
-          }
-        }
-      } else {
-        warnings = fallbackWarnings
-      }
-
-      this.emitProgress(
-        onProgress,
-        {
-          stage: 'combining_chunks',
-          message: 'Combining chunk transcripts...',
-          percent: 85,
-        },
-        progressContext,
-      )
-      const outputPath = await this.saveTranscript(
         inputFilePath,
-        fallbackResult.data.text,
         outputFileLabel,
-      )
-
-      this.emitProgress(
-        onProgress,
-        {
-          stage: 'saving_output',
-          message: 'Saving transcript output...',
-          percent: 95,
-        },
-        progressContext,
-      )
-      this.emitProgress(
-        onProgress,
-        {
-          stage: 'completed',
-          message: 'Transcription completed with fallback to parts mode.',
-          percent: 100,
-        },
-        progressContext,
-      )
-      return {
-        success: true,
-        data: fallbackResult.data.text,
-        outputPath,
-        modeRequested: requestedMode,
-        modeUsed: 'parts',
-        fallbackApplied: true,
-        warnings: fallbackWarnings,
-        mediaKind,
-        audioExtracted,
-        isComplete: true,
-        totalChunks: fallbackResult.data.totalChunks,
-        successfulChunks: fallbackResult.data.successfulChunks,
-        failedChunks: fallbackResult.data.failedChunks,
-        sourceDurationSec: expectedDurationSec,
-        transcribedDurationSec: fallbackResult.data.transcribedDurationSec,
-        coverageRatio: coverageResult.data,
-        subtitleGenerated,
-        subtitleFormats,
-        subtitlePaths,
-        subtitleCueCount,
-        subtitleQuality,
-        subtitleViolationCount,
-        subtitleQualityReportPath,
-        subtitleContents,
+        routing.chunkDuration,
+        subtitleRuntimeConfig,
+        subtitleProfile,
         subtitleTrackLanguageTag,
-      }
+        true,
+      )
     } catch (error: unknown) {
       const errorMessage = error instanceof Error ? error.message : String(error)
       console.error('Error processing audio file:', errorMessage)
-      this.emitProgress(
-        onProgress,
-        {
-          stage: 'failed',
-          message: errorMessage,
-          percent: 100,
-        },
-        progressContext,
-      )
-
-      return {
-        success: false,
-        error: errorMessage,
-        modeRequested: requestedMode,
-        modeUsed,
-        fallbackApplied: false,
-        warnings,
-        mediaKind,
-        audioExtracted,
-        isComplete: false,
-        sourceDurationSec: sourceDurationSec > 0 ? sourceDurationSec : undefined,
-      }
+      return this.buildResult(ctx, { error: errorMessage })
     } finally {
       await this.cleanupPreparedFiles(cleanupPaths)
     }
   }
 
   /**
-   * Updates the transcription configuration
+   * Handles the parts-mode transcription flow (also used for fallback).
    */
+  private async runPartsMode(
+    ctx: RunContext,
+    preparedInputPath: string,
+    inputFilePath: string,
+    outputFileLabel: string,
+    chunkDuration: number,
+    subtitleRuntimeConfig: SubtitleRuntimeConfig,
+    subtitleProfile: LanguageSubtitleProfile | null,
+    subtitleTrackLanguageTag: string | undefined,
+    fallbackApplied: boolean,
+  ): Promise<TranscriptionResult> {
+    const partsResult = await this.transcribeInParts(
+      preparedInputPath,
+      chunkDuration,
+      ctx.onProgress,
+      ctx.progressContext,
+    )
+    if (!partsResult.ok) {
+      const errorPrefix = fallbackApplied ? 'Fallback failed: ' : ''
+      return this.buildResult(ctx, {
+        error: `${errorPrefix}${partsResult.error.message}`,
+        fallbackApplied,
+      })
+    }
+
+    const expectedDurationSec = ctx.sourceDurationSec > 0
+      ? ctx.sourceDurationSec
+      : partsResult.data.totalPlannedDurationSec
+    const coverageResult = this.verifyCoverage(
+      expectedDurationSec,
+      partsResult.data.transcribedDurationSec,
+    )
+    if (!coverageResult.ok) {
+      return this.buildResult(ctx, {
+        error: coverageResult.error.message,
+        fallbackApplied,
+        totalChunks: partsResult.data.totalChunks,
+        successfulChunks: partsResult.data.successfulChunks,
+        failedChunks: partsResult.data.failedChunks,
+        sourceDurationSec: expectedDurationSec,
+        transcribedDurationSec: partsResult.data.transcribedDurationSec,
+        coverageRatio: expectedDurationSec > 0
+          ? partsResult.data.transcribedDurationSec / expectedDurationSec
+          : 1,
+      })
+    }
+
+    let subtitleFields: Partial<TranscriptionResult> = {}
+
+    if (subtitleRuntimeConfig.enabled) {
+      const activeProfile = subtitleProfile ||
+        resolveSubtitleProfile({ languageCode: 'en' }).profile
+      const chunkInputs: SubtitleChunkInput[] = partsResult.data.chunks.map(
+        (chunk) => ({
+          startSec: chunk.segment.startSec,
+          durationSec: chunk.segment.durationSec,
+          text: chunk.transcription.text,
+          words: chunk.transcription.words,
+          additionalFormats: chunk.transcription.additionalFormats,
+        }),
+      )
+
+      const subResult = await this.generateAndPersistSubtitles({
+        text: partsResult.data.text,
+        words: [],
+        additionalFormats: [],
+        sourceDurationSec: expectedDurationSec,
+        chunks: chunkInputs,
+        outputFileLabel,
+        profile: activeProfile,
+        trackLanguageTag: subtitleTrackLanguageTag || activeProfile.defaultTrackLanguageTag,
+        runtimeConfig: subtitleRuntimeConfig,
+        modeUsed: ctx.modeUsed,
+        modeRequested: ctx.modeRequested,
+        mediaKind: ctx.mediaKind,
+        onProgress: ctx.onProgress,
+        progressContext: ctx.progressContext,
+      })
+
+      if (!subResult.ok) {
+        return this.buildResult(ctx, {
+          error: subResult.error.message,
+          fallbackApplied,
+          totalChunks: partsResult.data.totalChunks,
+          successfulChunks: partsResult.data.successfulChunks,
+          failedChunks: partsResult.data.failedChunks,
+          sourceDurationSec: expectedDurationSec,
+          transcribedDurationSec: partsResult.data.transcribedDurationSec,
+          coverageRatio: coverageResult.data,
+        })
+      }
+
+      ctx.warnings = [...ctx.warnings, ...subResult.data.warnings]
+      subtitleFields = this.toSubtitleFields(subResult.data)
+
+      if (subResult.data.shouldFail) {
+        return this.buildResult(ctx, {
+          error: subResult.data.failureMessage!,
+          fallbackApplied,
+          totalChunks: partsResult.data.totalChunks,
+          successfulChunks: partsResult.data.successfulChunks,
+          failedChunks: partsResult.data.failedChunks,
+          sourceDurationSec: expectedDurationSec,
+          transcribedDurationSec: partsResult.data.transcribedDurationSec,
+          coverageRatio: coverageResult.data,
+          ...subtitleFields,
+        })
+      }
+    }
+
+    this.emitProgress(
+      ctx.onProgress,
+      {
+        stage: 'combining_chunks',
+        message: 'Combining chunk transcripts...',
+        percent: 85,
+      },
+      ctx.progressContext,
+    )
+    const outputPath = await this.saveTranscript(
+      inputFilePath,
+      partsResult.data.text,
+      outputFileLabel,
+    )
+
+    this.emitProgress(
+      ctx.onProgress,
+      {
+        stage: 'saving_output',
+        message: 'Saving transcript output...',
+        percent: 95,
+      },
+      ctx.progressContext,
+    )
+    this.emitProgress(
+      ctx.onProgress,
+      {
+        stage: 'completed',
+        message: fallbackApplied
+          ? 'Transcription completed with fallback to parts mode.'
+          : 'Transcription completed.',
+        percent: 100,
+      },
+      ctx.progressContext,
+    )
+
+    return this.buildResult(ctx, {
+      success: true,
+      data: partsResult.data.text,
+      outputPath,
+      fallbackApplied,
+      isComplete: true,
+      totalChunks: partsResult.data.totalChunks,
+      successfulChunks: partsResult.data.successfulChunks,
+      failedChunks: partsResult.data.failedChunks,
+      sourceDurationSec: expectedDurationSec,
+      transcribedDurationSec: partsResult.data.transcribedDurationSec,
+      coverageRatio: coverageResult.data,
+      ...subtitleFields,
+    })
+  }
+
+  /**
+   * Finishes the whole-mode flow after a successful transcription.
+   */
+  private async finishWholeMode(
+    ctx: RunContext,
+    transcription: StructuredTranscriptionResult,
+    inputFilePath: string,
+    outputFileLabel: string,
+    subtitleRuntimeConfig: SubtitleRuntimeConfig,
+    subtitleProfile: LanguageSubtitleProfile | null,
+    subtitleTrackLanguageTag: string | undefined,
+  ): Promise<TranscriptionResult> {
+    let subtitleFields: Partial<TranscriptionResult> = {}
+
+    if (subtitleRuntimeConfig.enabled) {
+      const activeProfile = subtitleProfile ||
+        resolveSubtitleProfile({ languageCode: 'en' }).profile
+
+      const subResult = await this.generateAndPersistSubtitles({
+        text: transcription.text,
+        words: transcription.words,
+        additionalFormats: transcription.additionalFormats,
+        sourceDurationSec: ctx.sourceDurationSec,
+        outputFileLabel,
+        profile: activeProfile,
+        trackLanguageTag: subtitleTrackLanguageTag || activeProfile.defaultTrackLanguageTag,
+        runtimeConfig: subtitleRuntimeConfig,
+        modeUsed: ctx.modeUsed,
+        modeRequested: ctx.modeRequested,
+        mediaKind: ctx.mediaKind,
+        onProgress: ctx.onProgress,
+        progressContext: ctx.progressContext,
+      })
+
+      if (!subResult.ok) {
+        return this.buildResult(ctx, { error: subResult.error.message })
+      }
+
+      ctx.warnings = [...ctx.warnings, ...subResult.data.warnings]
+      subtitleFields = this.toSubtitleFields(subResult.data)
+
+      if (subResult.data.shouldFail) {
+        return this.buildResult(ctx, {
+          error: subResult.data.failureMessage!,
+          ...subtitleFields,
+        })
+      }
+    }
+
+    this.emitProgress(
+      ctx.onProgress,
+      {
+        stage: 'saving_output',
+        message: 'Saving transcript output...',
+        percent: 95,
+      },
+      ctx.progressContext,
+    )
+    const outputPath = await this.saveTranscript(
+      inputFilePath,
+      transcription.text,
+      outputFileLabel,
+    )
+
+    this.emitProgress(
+      ctx.onProgress,
+      { stage: 'completed', message: 'Transcription completed.', percent: 100 },
+      ctx.progressContext,
+    )
+
+    return this.buildResult(ctx, {
+      success: true,
+      data: transcription.text,
+      outputPath,
+      isComplete: true,
+      ...subtitleFields,
+    })
+  }
+
   updateConfig(config: Partial<TranscriptionConfig>): void {
     if (this.transcriptionService) {
       this.transcriptionService.updateConfig(config)
     }
   }
 
-  /**
-   * Updates the output directory
-   * @param outputDir - New output directory
-   */
   updateOutputDir(outputDir: string): Promise<void> {
     if (outputDir && this.fileService) {
       this.fileService.setOutputDir(outputDir)

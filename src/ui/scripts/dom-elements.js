@@ -14,6 +14,13 @@ const DOMElements = {
   browseButton: document.getElementById('browse-button'),
   waveformContainer: document.getElementById('waveform'),
 
+  // YouTube
+  youtubeUrlInput: document.getElementById('youtube-url-input'),
+  youtubeFetchButton: document.getElementById('youtube-fetch-button'),
+  youtubePreview: document.getElementById('youtube-preview'),
+  youtubeTitleElement: document.getElementById('youtube-title'),
+  youtubeDurationElement: document.getElementById('youtube-duration'),
+
   // Controls
   languageSelect: document.getElementById('language-select'),
   modeWholeRadio: document.getElementById('mode-whole'),

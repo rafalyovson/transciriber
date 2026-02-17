@@ -1,132 +1,162 @@
-import DOMElements from './dom-elements.js'
+import DOMElements from "./dom-elements.js";
 import {
   handleDrop,
   handleFiles,
   highlight,
   preventDefaults,
+  processYouTubeUrl,
   unhighlight,
-} from './file-processing.js'
+} from "./file-processing.js";
 import {
   transcribeAudio,
   updateChunkDuration,
   updateLanguageDisplay,
   updateModeSelection,
-} from './transcription.js'
-import { saveSettings } from './settings.js'
-import { copyTranscription, exportTranscription } from './export.js'
-import { resetState, setOutputFolder } from './state.js'
-import { hideMessages, showError } from './ui-utils.js'
-import Bridge from './bridge.js'
+} from "./transcription.js";
+import { saveSettings } from "./settings.js";
+import { copyTranscription, exportTranscription } from "./export.js";
+import { resetState, setOutputFolder } from "./state.js";
+import { hideMessages, showError } from "./ui-utils.js";
+import Bridge from "./bridge.js";
 
 async function chooseOutputFolder() {
-  const selection = await Bridge.selectOutputFolder()
+  const selection = await Bridge.selectOutputFolder();
 
   if (!selection.success || !selection.folder) {
-    if (selection.error && selection.error !== 'No folder selected') {
-      showError(`Output folder selection failed: ${selection.error}`)
+    if (selection.error && selection.error !== "No folder selected") {
+      showError(`Output folder selection failed: ${selection.error}`);
     }
-    return
+    return;
   }
 
-  const updateResult = await Bridge.setOutputFolder(selection.folder)
+  const updateResult = await Bridge.setOutputFolder(selection.folder);
   if (!updateResult.success) {
-    showError(`Failed to set output folder: ${updateResult.error || 'Unknown error'}`)
-    return
+    showError(
+      `Failed to set output folder: ${updateResult.error || "Unknown error"}`,
+    );
+    return;
   }
 
-  setOutputFolder(selection.folder)
-  DOMElements.outputFolderPath.textContent = selection.folder
+  setOutputFolder(selection.folder);
+  DOMElements.outputFolderPath.textContent = selection.folder;
 }
 
 /**
  * Set up all event listeners
  */
 export function setupEventListeners() {
-  ;['dragenter', 'dragover', 'dragleave', 'drop'].forEach((eventName) => {
-    DOMElements.dropArea.addEventListener(eventName, preventDefaults, false)
-  })
+  ["dragenter", "dragover", "dragleave", "drop"].forEach((eventName) => {
+    DOMElements.dropArea.addEventListener(eventName, preventDefaults, false);
+  });
+  ["dragenter", "dragover"].forEach((eventName) => {
+    DOMElements.dropArea.addEventListener(eventName, highlight, false);
+  });
+  ["dragleave", "drop"].forEach((eventName) => {
+    DOMElements.dropArea.addEventListener(eventName, unhighlight, false);
+  });
 
-  ;['dragenter', 'dragover'].forEach((eventName) => {
-    DOMElements.dropArea.addEventListener(eventName, highlight, false)
-  })
+  DOMElements.dropArea.addEventListener("drop", handleDrop, false);
+  DOMElements.fileInput.addEventListener("change", handleFiles);
 
-  ;['dragleave', 'drop'].forEach((eventName) => {
-    DOMElements.dropArea.addEventListener(eventName, unhighlight, false)
-  })
+  DOMElements.browseButton.addEventListener("click", () => {
+    DOMElements.fileInput.click();
+  });
 
-  DOMElements.dropArea.addEventListener('drop', handleDrop, false)
-  DOMElements.fileInput.addEventListener('change', handleFiles)
+  DOMElements.youtubeFetchButton.addEventListener("click", processYouTubeUrl);
+  DOMElements.youtubeUrlInput.addEventListener("keydown", (event) => {
+    if (event.key === "Enter") {
+      event.preventDefault();
+      processYouTubeUrl();
+    }
+  });
 
-  DOMElements.browseButton.addEventListener('click', () => {
-    DOMElements.fileInput.click()
-  })
+  DOMElements.languageSelect.addEventListener("change", updateLanguageDisplay);
+  DOMElements.modeWholeRadio.addEventListener("change", updateModeSelection);
+  DOMElements.modePartsRadio.addEventListener("change", updateModeSelection);
+  DOMElements.chunkDurationInput.addEventListener(
+    "change",
+    updateChunkDuration,
+  );
 
-  DOMElements.languageSelect.addEventListener('change', updateLanguageDisplay)
-  DOMElements.modeWholeRadio.addEventListener('change', updateModeSelection)
-  DOMElements.modePartsRadio.addEventListener('change', updateModeSelection)
-  DOMElements.chunkDurationInput.addEventListener('change', updateChunkDuration)
+  DOMElements.selectOutputFolderButton.addEventListener("click", async () => {
+    await chooseOutputFolder();
+  });
 
-  DOMElements.selectOutputFolderButton.addEventListener('click', async () => {
-    await chooseOutputFolder()
-  })
+  DOMElements.transcribeButton.addEventListener("click", transcribeAudio);
 
-  DOMElements.transcribeButton.addEventListener('click', transcribeAudio)
+  DOMElements.settingsButton.addEventListener("click", () => {
+    DOMElements.settingsModal.classList.add("show");
+  });
 
-  DOMElements.settingsButton.addEventListener('click', () => {
-    DOMElements.settingsModal.classList.add('show')
-  })
+  DOMElements.closeModalButton.addEventListener("click", () => {
+    DOMElements.settingsModal.classList.remove("show");
+  });
 
-  DOMElements.closeModalButton.addEventListener('click', () => {
-    DOMElements.settingsModal.classList.remove('show')
-  })
-
-  DOMElements.settingsModal.addEventListener('click', (event) => {
+  DOMElements.settingsModal.addEventListener("click", (event) => {
     if (event.target === DOMElements.settingsModal) {
-      DOMElements.settingsModal.classList.remove('show')
+      DOMElements.settingsModal.classList.remove("show");
     }
-  })
+  });
 
-  DOMElements.saveSettingsButton.addEventListener('click', saveSettings)
+  DOMElements.saveSettingsButton.addEventListener("click", saveSettings);
 
-  DOMElements.exportButton.addEventListener('click', () => {
-    DOMElements.exportOptions.classList.toggle('show')
-  })
+  DOMElements.exportButton.addEventListener("click", () => {
+    const isOpen = DOMElements.exportOptions.classList.toggle("show");
+    DOMElements.exportButton.setAttribute("aria-expanded", String(isOpen));
+  });
 
-  document.addEventListener('click', (event) => {
-    const target = event.target
+  document.addEventListener("click", (event) => {
+    const target = event.target;
     if (!(target instanceof Node)) {
-      return
+      return;
     }
 
-    if (!DOMElements.exportButton.contains(target) && !DOMElements.exportOptions.contains(target)) {
-      DOMElements.exportOptions.classList.remove('show')
+    if (
+      !DOMElements.exportButton.contains(target) &&
+      !DOMElements.exportOptions.contains(target)
+    ) {
+      DOMElements.exportOptions.classList.remove("show");
+      DOMElements.exportButton.setAttribute("aria-expanded", "false");
     }
-  })
+  });
 
-  document.getElementById('export-txt').addEventListener('click', () => exportTranscription('txt'))
-  document.getElementById('export-srt').addEventListener('click', () => exportTranscription('srt'))
-  document.getElementById('export-vtt').addEventListener('click', () => exportTranscription('vtt'))
+  document
+    .getElementById("export-txt")
+    .addEventListener("click", () => exportTranscription("txt"));
+  document
+    .getElementById("export-srt")
+    .addEventListener("click", () => exportTranscription("srt"));
+  document
+    .getElementById("export-vtt")
+    .addEventListener("click", () => exportTranscription("vtt"));
 
-  DOMElements.copyButton.addEventListener('click', copyTranscription)
-  DOMElements.clearButton.addEventListener('click', clearTranscription)
+  DOMElements.copyButton.addEventListener("click", copyTranscription);
+  DOMElements.clearButton.addEventListener("click", clearTranscription);
 }
 
 /**
  * Clear transcription and reset UI
  */
 export function clearTranscription() {
-  resetState()
+  resetState();
 
-  DOMElements.fileInput.value = ''
-  DOMElements.filePreview.classList.add('hidden')
-  DOMElements.outputSection.classList.add('hidden')
-  DOMElements.transcriptionContent.textContent = ''
-  DOMElements.progressMessageElement.textContent = 'Waiting for a media file.'
-  DOMElements.progressStageElement.textContent = 'Queued...'
-  DOMElements.progressBarElement.style.width = '0%'
-  DOMElements.progressPercentElement.textContent = '0%'
+  DOMElements.fileInput.value = "";
+  DOMElements.filePreview.classList.add("hidden");
+  DOMElements.outputSection.classList.add("hidden");
+  DOMElements.transcriptionContent.textContent = "";
+  DOMElements.progressMessageElement.textContent = "Waiting for a media file.";
+  DOMElements.progressStageElement.textContent = "Queued...";
+  DOMElements.progressBarElement.style.width = "0%";
+  DOMElements.progressBarElement.parentElement?.setAttribute(
+    "aria-valuenow",
+    "0",
+  );
+  DOMElements.progressPercentElement.textContent = "0%";
 
-  hideMessages()
+  DOMElements.youtubeUrlInput.value = "";
+  DOMElements.youtubePreview.classList.add("hidden");
 
-  DOMElements.transcribeButton.disabled = true
+  hideMessages();
+
+  DOMElements.transcribeButton.disabled = true;
 }

@@ -35,7 +35,7 @@ if (useUI) {
   try {
     // Dynamically import the UI application only when needed
     const { TranscriberUI } = await import('./src/app/ui/index.ts')
-    const ui = TranscriberUI.getInstance()
+    const ui = new TranscriberUI()
 
     try {
       await ui.run()

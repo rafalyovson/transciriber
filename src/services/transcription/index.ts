@@ -7,6 +7,8 @@ import {
   TranscriptionWord,
 } from 'types'
 
+// Both snake_case and camelCase fields for defensive API response parsing —
+// the ElevenLabs SDK may return either depending on version.
 type ConvertResponse = {
   text?: string
   transcript?: string
@@ -19,7 +21,6 @@ type ConvertResponse = {
   language_code?: string
   languageCode?: string
   srt?: string
-  message?: string
 }
 
 function hasOwn<T extends object, K extends PropertyKey>(
@@ -53,7 +54,10 @@ function normalizeWordTimings(words: TranscriptionWord[]): TranscriptionWord[] {
     return words
   }
 
-  const maxTimestamp = words.reduce((max, word) => Math.max(max, word.endSec), 0)
+  const maxTimestamp = words.reduce(
+    (max, word) => Math.max(max, word.endSec),
+    0,
+  )
   // Heuristic: timestamps above 24h are likely in milliseconds.
   const looksLikeMilliseconds = maxTimestamp > 24 * 60 * 60
   const scale = looksLikeMilliseconds ? 1 / 1000 : 1
@@ -64,8 +68,11 @@ function normalizeWordTimings(words: TranscriptionWord[]): TranscriptionWord[] {
       startSec: word.startSec * scale,
       endSec: word.endSec * scale,
     }))
-    .filter((word) =>
-      Number.isFinite(word.startSec) && Number.isFinite(word.endSec) && word.endSec > word.startSec
+    .filter(
+      (word) =>
+        Number.isFinite(word.startSec) &&
+        Number.isFinite(word.endSec) &&
+        word.endSec > word.startSec,
     )
 }
 
@@ -79,10 +86,16 @@ function parseWords(rawWords: unknown[]): TranscriptionWord[] {
 
     const candidate = rawWord as Record<string, unknown>
     const text = extractText(candidate.word) || extractText(candidate.text)
-    const startSec = toNumber(candidate.start) ?? toNumber(candidate.start_time) ??
-      toNumber(candidate.startTime) ?? toNumber(candidate.start_ms) ?? toNumber(candidate.startMs)
-    const endSec = toNumber(candidate.end) ?? toNumber(candidate.end_time) ??
-      toNumber(candidate.endTime) ?? toNumber(candidate.end_ms) ?? toNumber(candidate.endMs)
+    const startSec = toNumber(candidate.start) ??
+      toNumber(candidate.start_time) ??
+      toNumber(candidate.startTime) ??
+      toNumber(candidate.start_ms) ??
+      toNumber(candidate.startMs)
+    const endSec = toNumber(candidate.end) ??
+      toNumber(candidate.end_time) ??
+      toNumber(candidate.endTime) ??
+      toNumber(candidate.end_ms) ??
+      toNumber(candidate.endMs)
 
     if (!text || startSec === null || endSec === null || endSec <= startSec) {
       continue
@@ -93,15 +106,19 @@ function parseWords(rawWords: unknown[]): TranscriptionWord[] {
       startSec,
       endSec,
       type: extractText(candidate.type) || undefined,
-      speakerId: extractText(candidate.speaker) || extractText(candidate.speaker_id) ||
-        extractText(candidate.speakerId) || undefined,
+      speakerId: extractText(candidate.speaker) ||
+        extractText(candidate.speaker_id) ||
+        extractText(candidate.speakerId) ||
+        undefined,
     })
   }
 
   return normalizeWordTimings(words)
 }
 
-function parseAdditionalFormats(response: ConvertResponse): AdditionalTranscriptFormat[] {
+function parseAdditionalFormats(
+  response: ConvertResponse,
+): AdditionalTranscriptFormat[] {
   const additionalFormats = response.additionalFormats || response.additional_formats || []
   const parsed: AdditionalTranscriptFormat[] = []
 
@@ -113,7 +130,8 @@ function parseAdditionalFormats(response: ConvertResponse): AdditionalTranscript
 
       const candidate = item as Record<string, unknown>
       const format = extractText(candidate.format).toLowerCase()
-      const content = extractText(candidate.content) || extractText(candidate.text) ||
+      const content = extractText(candidate.content) ||
+        extractText(candidate.text) ||
         extractText(candidate.value)
 
       if (format && content) {
@@ -122,7 +140,12 @@ function parseAdditionalFormats(response: ConvertResponse): AdditionalTranscript
     }
   }
 
-  if (typeof response.srt === 'string' && response.srt.trim().length > 0) {
+  const hasSrt = parsed.some((f) => f.format === 'srt')
+  if (
+    !hasSrt &&
+    typeof response.srt === 'string' &&
+    response.srt.trim().length > 0
+  ) {
     parsed.push({ format: 'srt', content: response.srt.trim() })
   }
 
@@ -166,11 +189,17 @@ export class TranscriptionService {
       return response.text
     }
 
-    if (typeof response.transcript === 'string' && response.transcript.length > 0) {
+    if (
+      typeof response.transcript === 'string' &&
+      response.transcript.length > 0
+    ) {
       return response.transcript
     }
 
-    if (Array.isArray(response.transcripts) && response.transcripts.length > 0) {
+    if (
+      Array.isArray(response.transcripts) &&
+      response.transcripts.length > 0
+    ) {
       const combined = response.transcripts
         .map((item) => item.text)
         .filter((text) => typeof text === 'string' && text.length > 0)
@@ -193,13 +222,14 @@ export class TranscriptionService {
       languageCode: this.config.languageCode,
       diarize: this.config.diarize,
       timestampsGranularity: 'word',
-      timestamps_granularity: 'word',
       timestamps: true,
       additionalFormats: [{ format: 'srt' }],
-      additional_formats: [{ format: 'srt' }],
     }
 
-    if (Array.isArray(this.config.keyterms) && this.config.keyterms.length > 0) {
+    if (
+      Array.isArray(this.config.keyterms) &&
+      this.config.keyterms.length > 0
+    ) {
       payload.keyterms = this.config.keyterms
       payload.keyTerms = this.config.keyterms
     }
@@ -216,16 +246,20 @@ export class TranscriptionService {
 
   private isAdditionalFormatsValidationError(error: unknown): boolean {
     const message = this.parseErrorMessage(error).toLowerCase()
-    return message.includes('additional_formats') &&
+    return (
+      message.includes('additional_formats') &&
       message.includes('diarization') &&
       message.includes('timestamps')
+    )
   }
 
   private async convertWithCompatibilityFallback(
     payload: Record<string, unknown>,
   ): Promise<ConvertResponse> {
     try {
-      return (await this.client.speechToText.convert(payload as never)) as ConvertResponse
+      return (await this.client.speechToText.convert(
+        payload as never,
+      )) as ConvertResponse
     } catch (error) {
       if (!this.isAdditionalFormatsValidationError(error)) {
         throw error
@@ -236,7 +270,6 @@ export class TranscriptionService {
         diarize: true,
         timestamps: true,
         timestampsGranularity: 'word',
-        timestamps_granularity: 'word',
       }
 
       try {
@@ -248,7 +281,9 @@ export class TranscriptionService {
           throw compatibilityError
         }
 
-        const noAdditionalFormatsPayload: Record<string, unknown> = { ...compatibilityPayload }
+        const noAdditionalFormatsPayload: Record<string, unknown> = {
+          ...compatibilityPayload,
+        }
         if (hasOwn(noAdditionalFormatsPayload, 'additionalFormats')) {
           delete noAdditionalFormatsPayload.additionalFormats
         }
@@ -268,7 +303,9 @@ export class TranscriptionService {
    * @param audioBlob - The audio blob to transcribe
    * @returns Structured transcription output
    */
-  async transcribe(audioBlob: Blob): Promise<Result<TranscriptionResult, Error>> {
+  async transcribe(
+    audioBlob: Blob,
+  ): Promise<Result<TranscriptionResult, Error>> {
     try {
       const activeApiKey = this.config.apiKey || Deno.env.get('ELEVENLABS_API_KEY')
 
@@ -295,7 +332,9 @@ export class TranscriptionService {
       if (!text) {
         return {
           ok: false,
-          error: new Error('Transcription response did not include text output.'),
+          error: new Error(
+            'Transcription response did not include text output.',
+          ),
         }
       }
 
@@ -316,7 +355,8 @@ export class TranscriptionService {
           text,
           words,
           additionalFormats,
-          languageCode: transcription.languageCode || transcription.language_code ||
+          languageCode: transcription.languageCode ||
+            transcription.language_code ||
             this.config.languageCode,
         },
       }

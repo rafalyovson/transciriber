@@ -1,12 +1,14 @@
+const DEFAULT_CHUNK_DURATION_SEC = 30
+
 /**
  * Gets the configured chunk duration or returns the default
  */
 export function getChunkDuration(): number {
   const envDuration = Deno.env.get('CHUNK_DURATION')
-  if (!envDuration) return 30 // Default to 30 seconds
+  if (!envDuration) return DEFAULT_CHUNK_DURATION_SEC
 
   const duration = parseInt(envDuration, 10)
-  return isNaN(duration) || duration <= 0 ? 30 : duration
+  return isNaN(duration) || duration <= 0 ? DEFAULT_CHUNK_DURATION_SEC : duration
 }
 
 /**
@@ -20,18 +22,18 @@ export function getLanguageCode(): string {
     return language.substring(0, 2).toLowerCase()
   }
 
-  // Simple mapping for common language names to codes
+  // Maps full language names (from LANGUAGE env var) to ISO 639-1 codes
   const languageMap: Record<string, string> = {
-    'english': 'en',
-    'armenian': 'hy',
-    'spanish': 'es',
-    'french': 'fr',
-    'german': 'de',
-    'italian': 'it',
-    'portuguese': 'pt',
-    'russian': 'ru',
-    'japanese': 'ja',
-    'chinese': 'zh',
+    english: 'en',
+    armenian: 'hy',
+    spanish: 'es',
+    french: 'fr',
+    german: 'de',
+    italian: 'it',
+    portuguese: 'pt',
+    russian: 'ru',
+    japanese: 'ja',
+    chinese: 'zh',
   }
 
   return languageMap[language] || 'en'

@@ -169,6 +169,30 @@ async function getTranscriptionJob(jobId) {
 }
 
 /**
+ * Download audio from a YouTube URL
+ * @param {string} url
+ * @returns {Promise<object>}
+ */
+async function downloadYouTube(url) {
+  try {
+    const response = await fetch(`${API_BASE_URL}/downloadYouTube`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ url }),
+    })
+
+    return await response.json()
+  } catch (error) {
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : String(error),
+    }
+  }
+}
+
+/**
  * Get available languages
  * @returns {Promise<string[]>}
  */
@@ -198,6 +222,7 @@ async function getLanguageName(code) {
 
 const Bridge = {
   uploadFile,
+  downloadYouTube,
   selectOutputFolder,
   setOutputFolder,
   getDefaultFolder,

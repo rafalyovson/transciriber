@@ -36,6 +36,7 @@ Audio and MP4 video transcription app built with Deno and ElevenLabs Speech-to-T
 - [Deno](https://deno.com/) v2.0+
 - FFmpeg + ffprobe (required for MP4 extraction, `parts` mode, and fallback mode)
 - ElevenLabs API key
+- [yt-dlp](https://github.com/yt-dlp/yt-dlp) (optional, required for YouTube URL transcription)
 
 ## Installation
 
@@ -52,7 +53,14 @@ cd transcriber
 - Linux: `sudo apt install ffmpeg`
 - Windows: install from [ffmpeg.org](https://ffmpeg.org/download.html) or `choco install ffmpeg`
 
-3. Create `.env` (optional but recommended):
+3. Install yt-dlp (optional, for YouTube URL support):
+
+- pip: `pip install yt-dlp`
+- macOS: `brew install yt-dlp`
+- Linux: `sudo apt install yt-dlp` or `pip install yt-dlp`
+- Windows: `choco install yt-dlp` or `pip install yt-dlp`
+
+4. Create `.env` (optional but recommended):
 
 ```env
 ELEVENLABS_API_KEY=your_api_key_here
@@ -81,7 +89,7 @@ deno task dev:ui
 ### CLI
 
 ```bash
-deno run --allow-read --allow-write --allow-net --allow-env --allow-run --env-file=.env main.ts [options] <media-file>
+deno run --allow-read --allow-write --allow-net --allow-env --allow-run --env-file=.env main.ts [options] <media-file-or-youtube-url>
 ```
 
 Options:
@@ -100,6 +108,9 @@ deno run -A --env-file=.env main.ts ./inputs/meeting.mp3 --mode=parts --chunk-du
 
 # MP4 video transcription (audio extracted first)
 deno run -A --env-file=.env main.ts ./inputs/interview.mp4 --mode=whole
+
+# YouTube URL transcription (requires yt-dlp)
+deno run -A --env-file=.env main.ts https://www.youtube.com/watch?v=VIDEO_ID
 ```
 
 ### UI

@@ -1,173 +1,394 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Transcriber Studio</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles/main.css">
-</head>
-<body>
-  <div class="background-layer" aria-hidden="true"></div>
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>Transcriber Studio</title>
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+        <link
+            href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=IBM+Plex+Sans:wght@400;500;600&display=swap"
+            rel="stylesheet"
+        />
+        <link rel="stylesheet" href="styles/main.css" />
+    </head>
+    <body>
+        <div class="background-layer" aria-hidden="true"></div>
 
-  <div class="app-shell">
-    <header class="app-header">
-      <div class="brand-block">
-        <div class="brand-icon" aria-hidden="true">
-          <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"></path>
-            <path d="M19 10v2a7 7 0 0 1-14 0v-2"></path>
-            <line x1="12" y1="19" x2="12" y2="22"></line>
-          </svg>
+        <div class="app-shell">
+            <header class="app-header">
+                <div class="brand-block">
+                    <div class="brand-icon" aria-hidden="true">
+                        <svg
+                            xmlns="http://www.w3.org/2000/svg"
+                            width="22"
+                            height="22"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-width="2"
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                        >
+                            <path
+                                d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"
+                            ></path>
+                            <path d="M19 10v2a7 7 0 0 1-14 0v-2"></path>
+                            <line x1="12" y1="19" x2="12" y2="22"></line>
+                        </svg>
+                    </div>
+                    <div>
+                        <h1>Transcriber Studio</h1>
+                        <p>Speech-to-text with ElevenLabs Scribe v2</p>
+                    </div>
+                </div>
+
+                <button
+                    id="settings-button"
+                    class="button ghost"
+                    type="button"
+                    aria-label="Open API settings"
+                >
+                    API Settings
+                </button>
+            </header>
+
+            <main class="dashboard-grid">
+                <section class="panel panel-upload">
+                    <div class="panel-title">
+                        <h2>1. Upload Media</h2>
+                        <p>
+                            Drop an audio file or MP4 video, or browse from
+                            disk.
+                        </p>
+                    </div>
+
+                    <div id="drop-area" class="drop-area">
+                        <div class="drop-area-content">
+                            <svg
+                                xmlns="http://www.w3.org/2000/svg"
+                                width="42"
+                                height="42"
+                                viewBox="0 0 24 24"
+                                fill="none"
+                                stroke="currentColor"
+                                stroke-width="2"
+                                stroke-linecap="round"
+                                stroke-linejoin="round"
+                                aria-hidden="true"
+                            >
+                                <path
+                                    d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"
+                                ></path>
+                                <polyline points="17 8 12 3 7 8"></polyline>
+                                <line x1="12" y1="3" x2="12" y2="15"></line>
+                            </svg>
+                            <p>Drag and drop an audio file or MP4 video</p>
+                            <span>or</span>
+                            <input
+                                type="file"
+                                id="file-input"
+                                accept="audio/*,video/mp4,.mp4"
+                                hidden
+                            />
+                            <button
+                                id="browse-button"
+                                class="button secondary"
+                                type="button"
+                            >
+                                Browse Files
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="url-separator">
+                        <span>or paste a YouTube link</span>
+                    </div>
+
+                    <div class="url-input-row">
+                        <input
+                            type="text"
+                            id="youtube-url-input"
+                            class="text-input"
+                            placeholder="https://www.youtube.com/watch?v=..."
+                        />
+                        <button
+                            id="youtube-fetch-button"
+                            class="button secondary"
+                            type="button"
+                        >
+                            Fetch
+                        </button>
+                    </div>
+
+                    <div id="youtube-preview" class="file-preview hidden">
+                        <div class="file-info">
+                            <div class="file-name" id="youtube-title"></div>
+                            <div class="file-size" id="youtube-duration"></div>
+                        </div>
+                    </div>
+
+                    <div id="file-preview" class="file-preview hidden">
+                        <div class="file-info">
+                            <div class="file-name" id="file-name"></div>
+                            <div class="file-size" id="file-size"></div>
+                        </div>
+                        <div
+                            class="waveform-container"
+                            id="waveform"
+                            aria-hidden="true"
+                        ></div>
+                    </div>
+                </section>
+
+                <section class="panel panel-controls">
+                    <div class="panel-title">
+                        <h2>2. Configure Job</h2>
+                        <p>Choose language, mode, and output folder.</p>
+                    </div>
+
+                    <div class="control-group">
+                        <label for="language-select">Language</label>
+                        <select
+                            id="language-select"
+                            class="select-input"
+                        ></select>
+                    </div>
+
+                    <div class="control-group">
+                        <span class="group-label">Transcription Mode</span>
+                        <div
+                            class="segmented-control"
+                            role="radiogroup"
+                            aria-label="Transcription mode"
+                        >
+                            <label class="segment-option">
+                                <input
+                                    id="mode-whole"
+                                    type="radio"
+                                    name="transcription-mode"
+                                    value="whole"
+                                    checked
+                                />
+                                <span>Whole File</span>
+                            </label>
+                            <label class="segment-option">
+                                <input
+                                    id="mode-parts"
+                                    type="radio"
+                                    name="transcription-mode"
+                                    value="parts"
+                                />
+                                <span>In Parts</span>
+                            </label>
+                        </div>
+                    </div>
+
+                    <div id="chunk-duration-group" class="control-group hidden">
+                        <label for="chunk-duration"
+                            >Chunk Duration (seconds)</label
+                        >
+                        <input
+                            id="chunk-duration"
+                            class="text-input"
+                            type="number"
+                            min="5"
+                            step="5"
+                            value="30"
+                        />
+                    </div>
+
+                    <div class="control-group">
+                        <label>Output Folder</label>
+                        <div class="output-folder-row">
+                            <div
+                                id="output-folder-path"
+                                class="output-path"
+                                title="Output folder path"
+                            ></div>
+                            <button
+                                id="select-output-folder"
+                                class="button secondary"
+                                type="button"
+                            >
+                                Choose
+                            </button>
+                        </div>
+                    </div>
+
+                    <button
+                        id="transcribe-button"
+                        class="button primary"
+                        type="button"
+                        disabled
+                    >
+                        Start Transcription
+                    </button>
+                </section>
+
+                <section class="panel panel-status">
+                    <div class="panel-title">
+                        <h2>3. Job Status</h2>
+                        <p id="progress-message">Waiting for a media file.</p>
+                    </div>
+
+                    <div
+                        id="progress"
+                        class="progress hidden"
+                        aria-live="polite"
+                    >
+                        <div class="spinner" aria-hidden="true"></div>
+                        <div class="progress-body">
+                            <p id="progress-stage" class="progress-stage">
+                                Queued...
+                            </p>
+                            <div
+                                class="progress-track"
+                                role="progressbar"
+                                aria-valuemin="0"
+                                aria-valuemax="100"
+                                aria-valuenow="0"
+                            >
+                                <div
+                                    id="progress-bar"
+                                    class="progress-bar"
+                                ></div>
+                            </div>
+                            <p id="progress-percent" class="progress-percent">
+                                0%
+                            </p>
+                        </div>
+                    </div>
+
+                    <div
+                        id="error-message"
+                        class="message error-message hidden"
+                        role="alert"
+                    ></div>
+                    <div
+                        id="success-message"
+                        class="message success-message hidden"
+                        role="status"
+                    ></div>
+                </section>
+
+                <section id="output-section" class="panel panel-output hidden">
+                    <div class="output-header">
+                        <h2>Transcript</h2>
+                        <div class="output-actions">
+                            <button
+                                id="copy-button"
+                                class="button secondary"
+                                type="button"
+                            >
+                                Copy
+                            </button>
+                            <div class="export-dropdown">
+                                <button
+                                    id="export-button"
+                                    class="button secondary"
+                                    type="button"
+                                    aria-haspopup="true"
+                                    aria-expanded="false"
+                                >
+                                    Export
+                                </button>
+                                <div
+                                    id="export-options"
+                                    class="export-options"
+                                    role="menu"
+                                >
+                                    <button
+                                        id="export-txt"
+                                        class="export-option"
+                                        type="button"
+                                        role="menuitem"
+                                    >
+                                        Text (.txt)
+                                    </button>
+                                    <button
+                                        id="export-srt"
+                                        class="export-option"
+                                        type="button"
+                                        role="menuitem"
+                                    >
+                                        Subtitles (.srt)
+                                    </button>
+                                    <button
+                                        id="export-vtt"
+                                        class="export-option"
+                                        type="button"
+                                        role="menuitem"
+                                    >
+                                        WebVTT (.vtt)
+                                    </button>
+                                </div>
+                            </div>
+                            <button
+                                id="clear-button"
+                                class="button danger"
+                                type="button"
+                            >
+                                Clear
+                            </button>
+                        </div>
+                    </div>
+                    <div
+                        id="transcription-content"
+                        class="transcription-content"
+                    ></div>
+                </section>
+            </main>
         </div>
-        <div>
-          <h1>Transcriber Studio</h1>
-          <p>Speech-to-text with ElevenLabs Scribe v2</p>
-        </div>
-      </div>
 
-      <button id="settings-button" class="button ghost" type="button" aria-label="Open API settings">
-        API Settings
-      </button>
-    </header>
-
-    <main class="dashboard-grid">
-      <section class="panel panel-upload">
-        <div class="panel-title">
-          <h2>1. Upload Media</h2>
-          <p>Drop an audio file or MP4 video, or browse from disk.</p>
-        </div>
-
-        <div id="drop-area" class="drop-area">
-          <div class="drop-area-content">
-            <svg xmlns="http://www.w3.org/2000/svg" width="42" height="42" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-              <polyline points="17 8 12 3 7 8"></polyline>
-              <line x1="12" y1="3" x2="12" y2="15"></line>
-            </svg>
-            <p>Drag and drop an audio file or MP4 video</p>
-            <span>or</span>
-            <input type="file" id="file-input" accept="audio/*,video/mp4,.mp4" hidden>
-            <button id="browse-button" class="button secondary" type="button">Browse Files</button>
-          </div>
-        </div>
-
-        <div id="file-preview" class="file-preview hidden">
-          <div class="file-info">
-            <div class="file-name" id="file-name"></div>
-            <div class="file-size" id="file-size"></div>
-          </div>
-          <div class="waveform-container" id="waveform" aria-hidden="true"></div>
-        </div>
-      </section>
-
-      <section class="panel panel-controls">
-        <div class="panel-title">
-          <h2>2. Configure Job</h2>
-          <p>Choose language, mode, and output folder.</p>
-        </div>
-
-        <div class="control-group">
-          <label for="language-select">Language</label>
-          <select id="language-select" class="select-input"></select>
-        </div>
-
-        <div class="control-group">
-          <span class="group-label">Transcription Mode</span>
-          <div class="segmented-control" role="radiogroup" aria-label="Transcription mode">
-            <label class="segment-option">
-              <input id="mode-whole" type="radio" name="transcription-mode" value="whole" checked>
-              <span>Whole File</span>
-            </label>
-            <label class="segment-option">
-              <input id="mode-parts" type="radio" name="transcription-mode" value="parts">
-              <span>In Parts</span>
-            </label>
-          </div>
-        </div>
-
-        <div id="chunk-duration-group" class="control-group hidden">
-          <label for="chunk-duration">Chunk Duration (seconds)</label>
-          <input id="chunk-duration" class="text-input" type="number" min="5" step="5" value="30">
-        </div>
-
-        <div class="control-group">
-          <label>Output Folder</label>
-          <div class="output-folder-row">
-            <div id="output-folder-path" class="output-path" title="Output folder path"></div>
-            <button id="select-output-folder" class="button secondary" type="button">Choose</button>
-          </div>
-        </div>
-
-        <button id="transcribe-button" class="button primary" type="button" disabled>
-          Start Transcription
-        </button>
-      </section>
-
-      <section class="panel panel-status">
-        <div class="panel-title">
-          <h2>3. Job Status</h2>
-          <p id="progress-message">Waiting for a media file.</p>
-        </div>
-
-        <div id="progress" class="progress hidden" aria-live="polite">
-          <div class="spinner" aria-hidden="true"></div>
-          <div class="progress-body">
-            <p id="progress-stage" class="progress-stage">Queued...</p>
-            <div class="progress-track" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
-              <div id="progress-bar" class="progress-bar"></div>
+        <div
+            id="settings-modal"
+            class="modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="settings-title"
+        >
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h2 id="settings-title">API Settings</h2>
+                    <button
+                        id="close-modal"
+                        class="close-button"
+                        aria-label="Close settings"
+                        type="button"
+                    >
+                        ×
+                    </button>
+                </div>
+                <div class="modal-body">
+                    <div class="settings-item">
+                        <label for="api-key">ElevenLabs API Key</label>
+                        <input
+                            type="password"
+                            id="api-key"
+                            class="text-input"
+                            placeholder="Enter API key (optional if in .env)"
+                        />
+                        <p class="settings-hint">
+                            If left empty, the app uses
+                            <code>ELEVENLABS_API_KEY</code> from environment
+                            variables.
+                        </p>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button
+                        id="save-settings"
+                        class="button primary"
+                        type="button"
+                    >
+                        Save
+                    </button>
+                </div>
             </div>
-            <p id="progress-percent" class="progress-percent">0%</p>
-          </div>
         </div>
 
-        <div id="error-message" class="message error-message hidden" role="alert"></div>
-        <div id="success-message" class="message success-message hidden" role="status"></div>
-      </section>
-
-      <section id="output-section" class="panel panel-output hidden">
-        <div class="output-header">
-          <h2>Transcript</h2>
-          <div class="output-actions">
-            <button id="copy-button" class="button secondary" type="button">Copy</button>
-            <div class="export-dropdown">
-              <button id="export-button" class="button secondary" type="button">Export</button>
-              <div id="export-options" class="export-options">
-                <button id="export-txt" class="export-option" type="button">Text (.txt)</button>
-                <button id="export-srt" class="export-option" type="button">Subtitles (.srt)</button>
-                <button id="export-vtt" class="export-option" type="button">WebVTT (.vtt)</button>
-              </div>
-            </div>
-            <button id="clear-button" class="button danger" type="button">Clear</button>
-          </div>
-        </div>
-        <div id="transcription-content" class="transcription-content"></div>
-      </section>
-    </main>
-  </div>
-
-  <div id="settings-modal" class="modal" role="dialog" aria-modal="true" aria-labelledby="settings-title">
-    <div class="modal-content">
-      <div class="modal-header">
-        <h2 id="settings-title">API Settings</h2>
-        <button id="close-modal" class="close-button" aria-label="Close settings" type="button">×</button>
-      </div>
-      <div class="modal-body">
-        <div class="settings-item">
-          <label for="api-key">ElevenLabs API Key</label>
-          <input type="password" id="api-key" class="text-input" placeholder="Enter API key (optional if in .env)">
-          <p class="settings-hint">If left empty, the app uses <code>ELEVENLABS_API_KEY</code> from environment variables.</p>
-        </div>
-      </div>
-      <div class="modal-footer">
-        <button id="save-settings" class="button primary" type="button">Save</button>
-      </div>
-    </div>
-  </div>
-
-  <script type="module" src="scripts/bridge.js"></script>
-  <script type="module" src="scripts/main.js"></script>
-</body>
+        <script type="module" src="scripts/bridge.js"></script>
+        <script type="module" src="scripts/main.js"></script>
+    </body>
 </html>
