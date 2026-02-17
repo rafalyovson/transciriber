@@ -1,6 +1,7 @@
-import { html } from 'htm/preact'
-import { useEffect } from 'preact/hooks'
+import { html } from "htm/preact";
+import { useEffect } from "preact/hooks";
 import {
+  apiKey,
   canStart,
   chunkDuration,
   language,
@@ -8,108 +9,140 @@ import {
   mode,
   outputFolder,
   saveSettings,
-} from '../signals/state.js'
-import { useTranscription } from '../hooks/use-transcription.js'
-import * as api from '../api.js'
+  serverHasApiKey,
+  uploadedFilePath,
+} from "../signals/state.js";
+import { useTranscription } from "../hooks/use-transcription.js";
+import * as api from "../api.js";
 
 export function ControlsPanel() {
-  const { start } = useTranscription()
+  const { start } = useTranscription();
 
   useEffect(() => {
     api.getLanguages().then((langs) => {
-      languages.value = langs
-    })
+      languages.value = langs;
+    });
     api.getDefaultFolder().then((res) => {
-      if (res.success) outputFolder.value = res.folder
-    })
-  }, [])
+      if (res.success) outputFolder.value = res.folder;
+    });
+    api.getApiKeyStatus().then((res) => {
+      serverHasApiKey.value = !!res.hasEnvKey;
+    });
+  }, []);
 
   async function selectFolder() {
-    const result = await api.selectOutputFolder()
+    const result = await api.selectOutputFolder();
     if (result.success && result.folder) {
-      outputFolder.value = result.folder
+      outputFolder.value = result.folder;
     }
   }
 
   function handleStart() {
-    saveSettings()
-    start()
+    saveSettings();
+    start();
   }
 
   return html`
-    <div class="panel controls-panel">
-      <h2>Settings</h2>
+    <div class="panel panel-controls">
+      <div class="panel-title">
+        <h2>Settings</h2>
+        <p>Configure transcription options</p>
+      </div>
+
       <div class="control-group">
         <label for="language-select">Language</label>
         <select
           id="language-select"
-          value="${language.value}"
-          onChange="${(e) => {
-            language.value = e.target.value
-          }}"
+          class="select-input"
+          value=${language.value}
+          onChange=${(e) => {
+            language.value = e.target.value;
+          }}
         >
-          ${languages.value.map((code) =>
-            html`
-              <option value="${code}">${code}</option>
-            `
+          ${languages.value.map(
+            (code) => html` <option value=${code}>${code}</option> `,
           )}
         </select>
       </div>
+
       <div class="control-group">
-        <label>Mode</label>
-        <div class="mode-toggle">
-          <label>
+        <span class="group-label">Mode</span>
+        <div class="segmented-control">
+          <label class="segment-option">
             <input
               type="radio"
               name="mode"
               value="whole"
-              checked="${mode.value === 'whole'}"
-              onChange="${() => {
-                mode.value = 'whole'
-              }}"
-            /> Whole
+              checked=${mode.value === "whole"}
+              onChange=${() => {
+                mode.value = "whole";
+              }}
+            />
+            <span>Whole</span>
           </label>
-          <label>
+          <label class="segment-option">
             <input
               type="radio"
               name="mode"
               value="parts"
-              checked="${mode.value === 'parts'}"
-              onChange="${() => {
-                mode.value = 'parts'
-              }}"
-            /> Parts
+              checked=${mode.value === "parts"}
+              onChange=${() => {
+                mode.value = "parts";
+              }}
+            />
+            <span>Parts</span>
           </label>
         </div>
       </div>
-      ${mode.value === 'parts' && html`
+
+      ${mode.value === "parts" &&
+      html`
         <div class="control-group">
           <label for="chunk-duration">Chunk Duration (sec)</label>
           <input
             id="chunk-duration"
+            class="text-input"
             type="number"
             min="10"
-            value="${chunkDuration.value}"
-            onChange="${(e) => {
-              chunkDuration.value = parseInt(e.target.value, 10) || 30
-            }}"
+            value=${chunkDuration.value}
+            onChange=${(e) => {
+              chunkDuration.value = parseInt(e.target.value, 10) || 30;
+            }}
           />
         </div>
       `}
+
       <div class="control-group">
         <label>Output Folder</label>
-        <div class="folder-row">
-          <span class="folder-path">${outputFolder.value || 'Default'}</span>
-          <button onClick="${selectFolder}">Browse</button>
+        <div class="output-folder-row">
+          <span class="output-path">${outputFolder.value || "Default"}</span>
+          <button class="button secondary" onClick=${selectFolder}>
+            Browse
+          </button>
         </div>
       </div>
+
       <button
-        class="transcribe-button"
-        disabled="${!canStart.value}"
-        onClick="${handleStart}"
+        id="transcribe-button"
+        class="button primary"
+        disabled=${!canStart.value}
+        onClick=${handleStart}
       >
         Transcribe
       </button>
+
+      ${!apiKey.value &&
+      !serverHasApiKey.value &&
+      html`<p class="settings-hint" style="margin-top:8px">
+        Set your ElevenLabs API key in
+        <strong style="color:var(--brand-500);cursor:pointer"> Settings</strong>
+        to enable transcription.
+      </p>`}
+      ${(apiKey.value || serverHasApiKey.value) &&
+      !uploadedFilePath.value &&
+      html`<p class="settings-hint" style="margin-top:8px">
+        Upload a file or fetch a YouTube URL to get started.
+      </p>`}
     </div>
-  `
+  `;
 }

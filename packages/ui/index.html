@@ -1,23 +1,34 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Transcriber Studio</title>
-    <link rel="stylesheet" href="./styles/main.css">
-    <script type="importmap">
-      {
-        "imports": {
-          "preact": "https://esm.sh/preact@10.28.3",
-          "preact/": "https://esm.sh/preact@10.28.3/",
-          "@preact/signals": "https://esm.sh/@preact/signals@2.8.1?external=preact",
-          "htm/preact": "https://esm.sh/htm@3.1.1/preact?external=preact"
-        }
-      }
-    </script>
-  </head>
-  <body>
-    <div id="app"></div>
-    <script type="module" src="./scripts/app.js"></script>
-  </body>
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>Transcriber Studio</title>
+        <link
+            rel="icon"
+            href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎙</text></svg>"
+        />
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+        <link
+            href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=Space+Grotesk:wght@700&display=swap"
+            rel="stylesheet"
+        />
+        <link rel="stylesheet" href="./styles/main.css" />
+        <script type="importmap">
+            {
+                "imports": {
+                    "preact": "https://esm.sh/preact@10.28.3",
+                    "preact/": "https://esm.sh/preact@10.28.3/",
+                    "@preact/signals": "https://esm.sh/@preact/signals@2.8.1?external=preact",
+                    "htm/preact": "https://esm.sh/htm@3.1.1/preact?external=preact"
+                }
+            }
+        </script>
+    </head>
+    <body>
+        <div class="background-layer"></div>
+        <div id="app"></div>
+        <script type="module" src="./scripts/app.js"></script>
+    </body>
 </html>

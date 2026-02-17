@@ -14,6 +14,11 @@ const SUPPORTED_LANGUAGES: Record<string, string> = {
 export function settingRoutes(deps: ServerDeps) {
   const app = new Hono()
 
+  app.get('/apiKeyStatus', (c) => {
+    const hasEnvKey = !!Deno.env.get('ELEVENLABS_API_KEY')
+    return c.json({ hasEnvKey })
+  })
+
   app.get('/languages', (c) => {
     return c.json(Object.keys(SUPPORTED_LANGUAGES))
   })

@@ -1,69 +1,93 @@
-import { html } from 'htm/preact'
-import { exportMenuOpen, subtitleArtifacts, transcriptionResult } from '../signals/state.js'
+import { html } from "htm/preact";
+import {
+  exportMenuOpen,
+  subtitleArtifacts,
+  transcriptionResult,
+} from "../signals/state.js";
 
 function downloadFile(content, filename, mimeType) {
-  const blob = new Blob([content], { type: mimeType })
-  const url = URL.createObjectURL(blob)
-  const a = document.createElement('a')
-  a.href = url
-  a.download = filename
-  a.click()
-  URL.revokeObjectURL(url)
+  const blob = new Blob([content], { type: mimeType });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
 }
 
 export function OutputPanel() {
-  if (!transcriptionResult.value) return null
+  if (!transcriptionResult.value) return null;
 
   function copyToClipboard() {
-    navigator.clipboard.writeText(transcriptionResult.value)
+    navigator.clipboard.writeText(transcriptionResult.value);
   }
 
   function exportTxt() {
-    downloadFile(transcriptionResult.value, 'transcript.txt', 'text/plain')
-    exportMenuOpen.value = false
+    downloadFile(transcriptionResult.value, "transcript.txt", "text/plain");
+    exportMenuOpen.value = false;
   }
 
   function exportSrt() {
-    const srt = subtitleArtifacts.value?.srt
+    const srt = subtitleArtifacts.value?.srt;
     if (srt) {
-      downloadFile(srt, 'transcript.srt', 'application/x-subrip')
-      exportMenuOpen.value = false
+      downloadFile(srt, "transcript.srt", "application/x-subrip");
+      exportMenuOpen.value = false;
     }
   }
 
   function exportVtt() {
-    const vtt = subtitleArtifacts.value?.vtt
+    const vtt = subtitleArtifacts.value?.vtt;
     if (vtt) {
-      downloadFile(vtt, 'transcript.vtt', 'text/vtt')
-      exportMenuOpen.value = false
+      downloadFile(vtt, "transcript.vtt", "text/vtt");
+      exportMenuOpen.value = false;
     }
   }
 
   return html`
-    <div class="panel output-panel">
+    <div class="panel panel-output">
       <div class="output-header">
         <h2>Output</h2>
         <div class="output-actions">
-          <button onClick="${copyToClipboard}">Copy</button>
+          <button class="button ghost" onClick=${copyToClipboard}>Copy</button>
           <div class="export-dropdown">
             <button
+              class="button secondary"
               aria-haspopup="true"
-              aria-expanded="${exportMenuOpen.value}"
-              onClick="${() => {
-                exportMenuOpen.value = !exportMenuOpen.value
-              }}"
+              aria-expanded=${exportMenuOpen.value}
+              onClick=${() => {
+                exportMenuOpen.value = !exportMenuOpen.value;
+              }}
             >
-              Export
+              Export ▾
             </button>
-            ${exportMenuOpen.value && html`
-              <div class="export-options" role="menu">
-                <button role="menuitem" onClick="${exportTxt}">TXT</button>
-                <button role="menuitem" onClick="${exportSrt}" disabled="${!subtitleArtifacts.value
-                  ?.srt}">SRT</button>
-                <button role="menuitem" onClick="${exportVtt}" disabled="${!subtitleArtifacts.value
-                  ?.vtt}">VTT</button>
-              </div>
-            `}
+            <div
+              class="export-options ${exportMenuOpen.value ? "show" : ""}"
+              role="menu"
+            >
+              <button
+                class="export-option"
+                role="menuitem"
+                onClick=${exportTxt}
+              >
+                TXT
+              </button>
+              <button
+                class="export-option"
+                role="menuitem"
+                onClick=${exportSrt}
+                disabled=${!subtitleArtifacts.value?.srt}
+              >
+                SRT
+              </button>
+              <button
+                class="export-option"
+                role="menuitem"
+                onClick=${exportVtt}
+                disabled=${!subtitleArtifacts.value?.vtt}
+              >
+                VTT
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -71,5 +95,5 @@ export function OutputPanel() {
         <pre>${transcriptionResult.value}</pre>
       </div>
     </div>
-  `
+  `;
 }
