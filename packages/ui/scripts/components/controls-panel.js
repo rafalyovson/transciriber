@@ -2,12 +2,17 @@ import { html } from "htm/preact";
 import { useEffect } from "preact/hooks";
 import {
   apiKey,
+  canExtractAudio,
   canStart,
   chunkDuration,
+  extractionMessage,
+  isExtracting,
   language,
   languages,
   mode,
+  originalFileName,
   outputFolder,
+  youtubeUrlInput,
   saveSettings,
   serverHasApiKey,
   uploadedFilePath,
@@ -40,6 +45,40 @@ export function ControlsPanel() {
   function handleStart() {
     saveSettings();
     start();
+  }
+
+  async function handleExtractAudio() {
+    isExtracting.value = true;
+    extractionMessage.value = null;
+
+    try {
+      const ytUrl = youtubeUrlInput.value.trim() || undefined;
+      const result = await api.extractAudio({
+        filePath: uploadedFilePath.value || "",
+        originalFileName: originalFileName.value || undefined,
+        outputFolder: outputFolder.value || undefined,
+        youtubeUrl: ytUrl,
+      });
+
+      if (result.success) {
+        extractionMessage.value = {
+          type: "success",
+          text: `Audio saved: ${result.fileName}`,
+        };
+      } else {
+        extractionMessage.value = {
+          type: "error",
+          text: result.error || "Audio extraction failed",
+        };
+      }
+    } catch (err) {
+      extractionMessage.value = {
+        type: "error",
+        text: err.message || "Audio extraction failed",
+      };
+    } finally {
+      isExtracting.value = false;
+    }
   }
 
   return html`
@@ -131,6 +170,23 @@ export function ControlsPanel() {
         Transcribe
       </button>
 
+      <button
+        id="extract-audio-button"
+        class="button secondary"
+        disabled=${!canExtractAudio.value}
+        onClick=${handleExtractAudio}
+      >
+        ${isExtracting.value ? "Extracting..." : "Extract Audio"}
+      </button>
+
+      ${extractionMessage.value &&
+      html`<div
+        class="message ${extractionMessage.value.type === "success"
+          ? "success-message"
+          : "error-message"}"
+      >
+        ${extractionMessage.value.text}
+      </div>`}
       ${!apiKey.value &&
       !serverHasApiKey.value &&
       html`<p class="settings-hint" style="margin-top:8px">
@@ -140,8 +196,9 @@ export function ControlsPanel() {
       </p>`}
       ${(apiKey.value || serverHasApiKey.value) &&
       !uploadedFilePath.value &&
+      !youtubeUrlInput.value.trim() &&
       html`<p class="settings-hint" style="margin-top:8px">
-        Upload a file or fetch a YouTube URL to get started.
+        Upload a file or paste a YouTube URL to get started.
       </p>`}
     </div>
   `;

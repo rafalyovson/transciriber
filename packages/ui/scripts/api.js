@@ -80,3 +80,27 @@ export async function getDefaultFolder() {
   const res = await fetch(`${API}/settings/defaultFolder`);
   return res.json();
 }
+
+export async function extractAudio({
+  filePath,
+  originalFileName,
+  outputFolder,
+  youtubeUrl,
+}) {
+  const res = await fetch(`${API}/files/extract-audio`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      filePath,
+      originalFileName,
+      outputFolder,
+      youtubeUrl,
+    }),
+  });
+  if (!res.ok) {
+    throw new Error(
+      await parseErrorResponse(res, `Audio extraction failed (${res.status})`),
+    );
+  }
+  return res.json();
+}

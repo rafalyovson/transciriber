@@ -1,8 +1,10 @@
 import { Hono } from '@hono/hono'
 import { vValidator } from '@hono/valibot-validator'
-import { extname, join } from '@std/path'
+import { extname, join, parse } from '@std/path'
+import { exists } from '@std/fs/exists'
 import { YouTubeDownloaderService } from '@transcriber/youtube-downloader'
-import { DownloadYouTubeSchema } from '../schemas.ts'
+import { MediaPreprocessorService } from '@transcriber/media-preprocessor'
+import { DownloadYouTubeSchema, ExtractAudioSchema } from '../schemas.ts'
 import type { ServerDeps } from '../mod.ts'
 
 const SUPPORTED_AUDIO_EXTENSIONS = new Set([
@@ -135,6 +137,121 @@ export function fileRoutes(deps: ServerDeps) {
           mimeType: 'audio/wav',
           youtubeTitle: downloadResult.data.title,
           durationSec: downloadResult.data.durationSec,
+        })
+      } catch (error) {
+        return c.json(
+          {
+            success: false,
+            error: error instanceof Error ? error.message : String(error),
+          },
+          500,
+        )
+      }
+    },
+  )
+
+  // Extract audio to MP3
+  app.post(
+    '/extract-audio',
+    vValidator('json', ExtractAudioSchema, (result, c) => {
+      if (!result.success) {
+        return c.json(
+          { success: false, error: 'Invalid request. filePath is required.' },
+          400,
+        )
+      }
+    }),
+    async (c) => {
+      try {
+        const { filePath, originalFileName, outputFolder, youtubeUrl } = c.req.valid('json')
+
+        const targetFolder = outputFolder || deps.outputFolders[0] || Deno.cwd()
+        if (!(await exists(targetFolder))) {
+          return c.json(
+            { success: false, error: 'Output folder does not exist.' },
+            400,
+          )
+        }
+
+        const baseName = originalFileName
+          ? parse(originalFileName).name
+          : filePath
+          ? parse(filePath).name
+          : ''
+
+        // YouTube source: download directly as MP3 via yt-dlp (no intermediate WAV)
+        if (youtubeUrl && YouTubeDownloaderService.isYouTubeUrl(youtubeUrl)) {
+          const ytService = new YouTubeDownloaderService()
+          const availCheck = await ytService.checkAvailability()
+          if (!availCheck.ok) {
+            return c.json(
+              { success: false, error: availCheck.error.message },
+              500,
+            )
+          }
+
+          const downloadResult = await ytService.downloadAudio({
+            url: youtubeUrl,
+            outputDir: targetFolder,
+            format: 'mp3',
+          })
+
+          if (!downloadResult.ok) {
+            return c.json(
+              { success: false, error: downloadResult.error.message },
+              500,
+            )
+          }
+
+          // Use original name, or video title from yt-dlp
+          const ytBaseName = baseName || downloadResult.data.title || 'youtube-audio'
+          const finalPath = join(targetFolder, `${ytBaseName}.mp3`)
+          if (downloadResult.data.filePath !== finalPath) {
+            try {
+              await Deno.rename(downloadResult.data.filePath, finalPath)
+            } catch {
+              // If rename fails (e.g. cross-device), keep the yt-dlp output as-is
+              return c.json({
+                success: true,
+                outputPath: downloadResult.data.filePath,
+                fileName: downloadResult.data.filePath.split('/').pop(),
+              })
+            }
+          }
+
+          return c.json({
+            success: true,
+            outputPath: finalPath,
+            fileName: `${ytBaseName}.mp3`,
+          })
+        }
+
+        // Local file: extract audio via FFmpeg
+        if (!(await exists(filePath))) {
+          return c.json(
+            {
+              success: false,
+              error: 'Source file not found. Please upload a file first.',
+            },
+            400,
+          )
+        }
+
+        const outputPath = join(targetFolder, `${baseName}.mp3`)
+        const preprocessor = new MediaPreprocessorService()
+        const result = await preprocessor.extractAudioToMp3(
+          filePath,
+          outputPath,
+        )
+
+        if (!result.ok) {
+          return c.json({ success: false, error: result.error.message }, 500)
+        }
+
+        return c.json({
+          success: true,
+          outputPath: result.data.outputPath,
+          fileName: `${baseName}.mp3`,
         })
       } catch (error) {
         return c.json(

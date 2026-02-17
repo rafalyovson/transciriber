@@ -16,6 +16,10 @@ export type MediaPreparationResult = {
   cleanupPaths: string[]
 }
 
+export type AudioExtractionResult = {
+  outputPath: string
+}
+
 function createCommandRunner(): CommandRunner {
   return async (command, args) => {
     const process = new Deno.Command(command, {
@@ -58,7 +62,9 @@ export class MediaPreprocessorService {
     return new TextDecoder().decode(buffer).trim()
   }
 
-  private async probeHasAudioStream(inputPath: string): Promise<Result<boolean, Error>> {
+  private async probeHasAudioStream(
+    inputPath: string,
+  ): Promise<Result<boolean, Error>> {
     try {
       const probeResult = await this.runCommand('ffprobe', [
         '-v',
@@ -174,8 +180,14 @@ export class MediaPreprocessorService {
       }
     }
 
-    const extractedAudioPath = join(tempDir, `extracted_${this.idGenerator()}.wav`)
-    const extractionResult = await this.extractAudioToWav(inputPath, extractedAudioPath)
+    const extractedAudioPath = join(
+      tempDir,
+      `extracted_${this.idGenerator()}.wav`,
+    )
+    const extractionResult = await this.extractAudioToWav(
+      inputPath,
+      extractedAudioPath,
+    )
     if (!extractionResult.ok) {
       return extractionResult
     }
@@ -189,6 +201,50 @@ export class MediaPreprocessorService {
         warnings: ['Audio extracted from MP4 before transcription.'],
         cleanupPaths: [extractedAudioPath],
       },
+    }
+  }
+
+  async extractAudioToMp3(
+    inputPath: string,
+    outputPath: string,
+  ): Promise<Result<AudioExtractionResult, Error>> {
+    try {
+      const result = await this.runCommand('ffmpeg', [
+        '-hide_banner',
+        '-loglevel',
+        'error',
+        '-y',
+        '-i',
+        inputPath,
+        '-vn',
+        '-map',
+        '0:a:0?',
+        '-c:a',
+        'libmp3lame',
+        '-q:a',
+        '2',
+        outputPath,
+      ])
+
+      if (result.code !== 0) {
+        const stderr = this.decodeOutput(result.stderr)
+        return {
+          ok: false,
+          error: new Error(
+            `Failed to extract audio as MP3. ${stderr || 'FFmpeg exited with a non-zero status.'}`,
+          ),
+        }
+      }
+
+      return { ok: true, data: { outputPath } }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      return {
+        ok: false,
+        error: new Error(
+          `Unable to run FFmpeg for MP3 extraction. Ensure FFmpeg is installed and available on PATH. ${message}`,
+        ),
+      }
     }
   }
 }

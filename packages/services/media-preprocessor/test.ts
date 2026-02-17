@@ -28,7 +28,9 @@ function createMockRunner(responses: MockResponse[]): {
       throw new Error(`Unexpected command call: ${command}`)
     }
     if (response.command !== command) {
-      throw new Error(`Expected command ${response.command} but got ${command}`)
+      throw new Error(
+        `Expected command ${response.command} but got ${command}`,
+      )
     }
 
     return Promise.resolve({
@@ -41,27 +43,30 @@ function createMockRunner(responses: MockResponse[]): {
   return { runCommand, calls }
 }
 
-Deno.test('MediaPreprocessorService bypasses extraction for audio input', async () => {
-  const { runCommand, calls } = createMockRunner([])
-  const service = new MediaPreprocessorService({ runCommand })
+Deno.test(
+  'MediaPreprocessorService bypasses extraction for audio input',
+  async () => {
+    const { runCommand, calls } = createMockRunner([])
+    const service = new MediaPreprocessorService({ runCommand })
 
-  const result = await service.prepareInputForTranscription({
-    inputPath: '/tmp/audio.mp3',
-    tempDir: '/tmp',
-    mimeTypeHint: 'audio/mpeg',
-  })
+    const result = await service.prepareInputForTranscription({
+      inputPath: '/tmp/audio.mp3',
+      tempDir: '/tmp',
+      mimeTypeHint: 'audio/mpeg',
+    })
 
-  assertEquals(result.ok, true)
-  if (!result.ok) {
-    return
-  }
+    assertEquals(result.ok, true)
+    if (!result.ok) {
+      return
+    }
 
-  assertEquals(result.data.preparedFilePath, '/tmp/audio.mp3')
-  assertEquals(result.data.mediaKind, 'audio')
-  assertEquals(result.data.audioExtracted, false)
-  assertEquals(result.data.cleanupPaths.length, 0)
-  assertEquals(calls.length, 0)
-})
+    assertEquals(result.data.preparedFilePath, '/tmp/audio.mp3')
+    assertEquals(result.data.mediaKind, 'audio')
+    assertEquals(result.data.audioExtracted, false)
+    assertEquals(result.data.cleanupPaths.length, 0)
+    assertEquals(calls.length, 0)
+  },
+)
 
 Deno.test('MediaPreprocessorService extracts MP4 audio to wav', async () => {
   const { runCommand, calls } = createMockRunner([
@@ -102,27 +107,106 @@ Deno.test('MediaPreprocessorService extracts MP4 audio to wav', async () => {
   assertEquals(calls[1].command, 'ffmpeg')
 })
 
-Deno.test('MediaPreprocessorService fails for MP4 without audio stream', async () => {
+Deno.test('MediaPreprocessorService extracts audio to MP3', async () => {
   const { runCommand, calls } = createMockRunner([
     {
-      command: 'ffprobe',
+      command: 'ffmpeg',
       code: 0,
-      stdout: '',
     },
   ])
   const service = new MediaPreprocessorService({ runCommand })
 
-  const result = await service.prepareInputForTranscription({
-    inputPath: '/tmp/silent-video.mp4',
-    tempDir: '/tmp',
-  })
+  const result = await service.extractAudioToMp3(
+    '/tmp/video.mp4',
+    '/output/video.mp3',
+  )
 
-  assertEquals(result.ok, false)
-  if (result.ok) {
-    return
-  }
+  assertEquals(result.ok, true)
+  if (!result.ok) return
 
-  assertStringIncludes(result.error.message, 'does not contain an audio stream')
+  assertEquals(result.data.outputPath, '/output/video.mp3')
   assertEquals(calls.length, 1)
-  assertEquals(calls[0].command, 'ffprobe')
+  assertEquals(calls[0].command, 'ffmpeg')
+  const args = calls[0].args
+  assertEquals(args.includes('libmp3lame'), true)
+  assertEquals(args.includes('-q:a'), true)
 })
+
+Deno.test(
+  'MediaPreprocessorService handles MP3 extraction failure',
+  async () => {
+    const { runCommand } = createMockRunner([
+      {
+        command: 'ffmpeg',
+        code: 1,
+        stderr: 'No audio stream found',
+      },
+    ])
+    const service = new MediaPreprocessorService({ runCommand })
+
+    const result = await service.extractAudioToMp3(
+      '/tmp/silent.mp4',
+      '/output/silent.mp3',
+    )
+
+    assertEquals(result.ok, false)
+    if (result.ok) return
+    assertStringIncludes(
+      result.error.message,
+      'Failed to extract audio as MP3',
+    )
+  },
+)
+
+Deno.test(
+  'MediaPreprocessorService handles missing FFmpeg for MP3 extraction',
+  async () => {
+    const runCommand: CommandRunner = () => {
+      throw new Error('Command not found: ffmpeg')
+    }
+    const service = new MediaPreprocessorService({ runCommand })
+
+    const result = await service.extractAudioToMp3(
+      '/tmp/video.mp4',
+      '/output/video.mp3',
+    )
+
+    assertEquals(result.ok, false)
+    if (result.ok) return
+    assertStringIncludes(
+      result.error.message,
+      'Unable to run FFmpeg for MP3 extraction',
+    )
+  },
+)
+
+Deno.test(
+  'MediaPreprocessorService fails for MP4 without audio stream',
+  async () => {
+    const { runCommand, calls } = createMockRunner([
+      {
+        command: 'ffprobe',
+        code: 0,
+        stdout: '',
+      },
+    ])
+    const service = new MediaPreprocessorService({ runCommand })
+
+    const result = await service.prepareInputForTranscription({
+      inputPath: '/tmp/silent-video.mp4',
+      tempDir: '/tmp',
+    })
+
+    assertEquals(result.ok, false)
+    if (result.ok) {
+      return
+    }
+
+    assertStringIncludes(
+      result.error.message,
+      'does not contain an audio stream',
+    )
+    assertEquals(calls.length, 1)
+    assertEquals(calls[0].command, 'ffprobe')
+  },
+)

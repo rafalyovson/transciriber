@@ -10,6 +10,7 @@ export type VideoInfo = {
 export type DownloadAudioOptions = {
   url: string
   outputDir: string
+  format?: 'wav' | 'mp3'
 }
 
 export type DownloadAudioResult = {
@@ -51,7 +52,11 @@ export class YouTubeDownloaderService {
     try {
       const url = new URL(input)
       const hostname = url.hostname.replace(/^www\./, '')
-      return hostname === 'youtube.com' || hostname === 'm.youtube.com' || hostname === 'youtu.be'
+      return (
+        hostname === 'youtube.com' ||
+        hostname === 'm.youtube.com' ||
+        hostname === 'youtu.be'
+      )
     } catch {
       return false
     }
@@ -122,8 +127,10 @@ export class YouTubeDownloaderService {
     }
   }
 
-  async downloadAudio(options: DownloadAudioOptions): Promise<Result<DownloadAudioResult, Error>> {
-    const { url, outputDir } = options
+  async downloadAudio(
+    options: DownloadAudioOptions,
+  ): Promise<Result<DownloadAudioResult, Error>> {
+    const { url, outputDir, format = 'wav' } = options
 
     try {
       await ensureDir(outputDir)
@@ -133,13 +140,16 @@ export class YouTubeDownloaderService {
       const title = infoResult.ok ? infoResult.data.title : 'Unknown'
       const durationSec = infoResult.ok ? infoResult.data.durationSec : 0
 
-      const outputTemplate = join(outputDir, `yt_${this.idGenerator()}.%(ext)s`)
+      const outputTemplate = join(
+        outputDir,
+        `yt_${this.idGenerator()}.%(ext)s`,
+      )
 
       // Download audio — --print after_move:filepath gives us the actual final path
       const result = await this.runCommand('yt-dlp', [
         '-x',
         '--audio-format',
-        'wav',
+        format,
         '--audio-quality',
         '0',
         '--no-playlist',

@@ -3,8 +3,10 @@ import { useRef, useState } from "preact/hooks";
 import {
   currentFile,
   errorMessage,
+  extractionMessage,
   originalFileName,
   uploadedFilePath,
+  youtubeUrlInput,
 } from "../signals/state.js";
 import * as api from "../api.js";
 
@@ -19,6 +21,7 @@ export function UploadPanel() {
     currentFile.value = file;
     originalFileName.value = file.name;
     errorMessage.value = null;
+    extractionMessage.value = null;
 
     try {
       const result = await api.uploadFile(file);
@@ -52,6 +55,8 @@ export function UploadPanel() {
     currentFile.value = null;
     originalFileName.value = null;
     uploadedFilePath.value = null;
+    youtubeUrlInput.value = "";
+    extractionMessage.value = null;
     if (fileInputRef.current) fileInputRef.current.value = "";
   }
 
@@ -159,7 +164,12 @@ export function UploadPanel() {
           class="text-input"
           type="text"
           placeholder="Paste a YouTube URL..."
+          value=${youtubeUrlInput.value}
           disabled=${fetching}
+          onInput=${(e) => {
+            youtubeUrlInput.value = e.target.value;
+            extractionMessage.value = null;
+          }}
           onKeyDown=${(e) => e.key === "Enter" && fetchYouTube()}
         />
         <button

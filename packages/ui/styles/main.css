@@ -137,7 +137,8 @@ body {
     min-height: 240px;
 }
 
-#transcribe-button {
+#transcribe-button,
+#extract-audio-button {
     width: 100%;
     padding: 14px;
     margin-top: 8px;

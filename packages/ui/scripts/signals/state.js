@@ -12,6 +12,7 @@ function loadSetting(key, fallback) {
 export const currentFile = signal(null);
 export const uploadedFilePath = signal(null);
 export const originalFileName = signal("");
+export const youtubeUrlInput = signal("");
 
 // Settings
 export const apiKey = signal(loadSetting("transcriber_apiKey", ""));
@@ -33,6 +34,10 @@ export const errorMessage = signal(null);
 export const transcriptionResult = signal(null);
 export const subtitleArtifacts = signal(null);
 
+// Audio extraction state
+export const isExtracting = signal(false);
+export const extractionMessage = signal(null);
+
 // UI state
 export const settingsOpen = signal(false);
 export const exportMenuOpen = signal(false);
@@ -51,6 +56,11 @@ export const canStart = computed(
     uploadedFilePath.value &&
     (apiKey.value || serverHasApiKey.value) &&
     !isTranscribing.value,
+);
+export const canExtractAudio = computed(
+  () =>
+    (uploadedFilePath.value || youtubeUrlInput.value.trim()) &&
+    !isExtracting.value,
 );
 
 // Persistence helpers
@@ -84,5 +94,6 @@ export function resetFileState() {
   currentFile.value = null;
   uploadedFilePath.value = null;
   originalFileName.value = "";
+  youtubeUrlInput.value = "";
   resetJobState();
 }

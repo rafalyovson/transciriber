@@ -1,4 +1,4 @@
-import { join } from '@std/path'
+import { join, parse } from '@std/path'
 import {
   createEventBus,
   getChunkDuration,
@@ -8,24 +8,35 @@ import {
   type TranscriptionOutput,
 } from '@transcriber/core'
 import { YouTubeDownloaderService } from '@transcriber/youtube-downloader'
+import { MediaPreprocessorService } from '@transcriber/media-preprocessor'
 
 type ParsedCLIArgs = {
   filePath: string
   mode: TranscriptionMode
   modeExplicit: boolean
   chunkDuration: number
+  extractAudio: boolean
 }
 
 const WHOLE_MODE: TranscriptionMode = 'whole'
 const PARTS_MODE: TranscriptionMode = 'parts'
 
-export function parseCLIArgs(args: string[], defaultChunkDuration: number): ParsedCLIArgs {
+export function parseCLIArgs(
+  args: string[],
+  defaultChunkDuration: number,
+): ParsedCLIArgs {
   let filePath = ''
   let mode: TranscriptionMode = WHOLE_MODE
   let modeExplicit = false
   let chunkDuration = defaultChunkDuration
+  let extractAudio = false
 
   for (const arg of args) {
+    if (arg === '--extract-audio') {
+      extractAudio = true
+      continue
+    }
+
     if (!arg.startsWith('--') && !filePath) {
       filePath = arg
       continue
@@ -37,7 +48,9 @@ export function parseCLIArgs(args: string[], defaultChunkDuration: number): Pars
         mode = rawMode
         modeExplicit = true
       } else {
-        throw new Error(`Invalid mode "${rawMode}". Use --mode=whole or --mode=parts.`)
+        throw new Error(
+          `Invalid mode "${rawMode}". Use --mode=whole or --mode=parts.`,
+        )
       }
       continue
     }
@@ -45,7 +58,9 @@ export function parseCLIArgs(args: string[], defaultChunkDuration: number): Pars
     if (arg.startsWith('--chunk-duration=')) {
       const rawDuration = parseInt(arg.split('=')[1] || '', 10)
       if (!Number.isFinite(rawDuration) || rawDuration <= 0) {
-        throw new Error('Invalid chunk duration. Use a positive integer, e.g. --chunk-duration=30.')
+        throw new Error(
+          'Invalid chunk duration. Use a positive integer, e.g. --chunk-duration=30.',
+        )
       }
       chunkDuration = rawDuration
     }
@@ -55,15 +70,19 @@ export function parseCLIArgs(args: string[], defaultChunkDuration: number): Pars
     throw new Error('No input file specified.')
   }
 
-  return { filePath, mode, modeExplicit, chunkDuration }
+  return { filePath, mode, modeExplicit, chunkDuration, extractAudio }
 }
 
 function printResult(result: TranscriptionOutput): void {
   if (result.success) {
     if (!result.isComplete) {
-      console.error('Transcription finished but did not satisfy completeness checks.')
+      console.error(
+        'Transcription finished but did not satisfy completeness checks.',
+      )
       if (typeof result.coverageRatio === 'number') {
-        console.error(`Coverage ratio: ${(result.coverageRatio * 100).toFixed(2)}%`)
+        console.error(
+          `Coverage ratio: ${(result.coverageRatio * 100).toFixed(2)}%`,
+        )
       }
       Deno.exit(1)
     }
@@ -86,12 +105,16 @@ function printResult(result: TranscriptionOutput): void {
     ) {
       console.log(
         `Duration coverage: ${result.transcribedDurationSec.toFixed(2)}s / ${
-          result.sourceDurationSec.toFixed(2)
+          result.sourceDurationSec.toFixed(
+            2,
+          )
         }s`,
       )
     }
     if (typeof result.coverageRatio === 'number') {
-      console.log(`Coverage ratio: ${(result.coverageRatio * 100).toFixed(2)}%`)
+      console.log(
+        `Coverage ratio: ${(result.coverageRatio * 100).toFixed(2)}%`,
+      )
     }
     if (result.subtitleGenerated) {
       console.log(
@@ -100,7 +123,9 @@ function printResult(result: TranscriptionOutput): void {
         }`,
       )
       if (result.subtitleTrackLanguageTag) {
-        console.log(`Subtitle track language tag: ${result.subtitleTrackLanguageTag}`)
+        console.log(
+          `Subtitle track language tag: ${result.subtitleTrackLanguageTag}`,
+        )
       }
       if (result.subtitlePaths?.srt) {
         console.log(`Saved SRT: ${result.subtitlePaths.srt}`)
@@ -113,15 +138,20 @@ function printResult(result: TranscriptionOutput): void {
     }
 
     const subtitleViolationCount = result.subtitleViolationCount ??
-      result.subtitleQuality?.violations.length ?? 0
+      result.subtitleQuality?.violations.length ??
+      0
     if (subtitleViolationCount > 0) {
       const preview = result.subtitleQuality?.violations.slice(0, 3).join(' ')
       const remainder = subtitleViolationCount - Math.min(subtitleViolationCount, 3)
       const tail = remainder > 0 ? ` (+${remainder} more)` : ''
-      console.log(`Subtitle quality notes: ${preview || 'See quality report.'}${tail}`)
+      console.log(
+        `Subtitle quality notes: ${preview || 'See quality report.'}${tail}`,
+      )
     }
     if (result.subtitleQualityReportPath) {
-      console.log(`Subtitle quality report: ${result.subtitleQualityReportPath}`)
+      console.log(
+        `Subtitle quality report: ${result.subtitleQualityReportPath}`,
+      )
     }
     if (result.outputPath) {
       console.log(`Saved markdown: ${result.outputPath}`)
@@ -141,10 +171,68 @@ export async function runCLI(): Promise<void> {
   try {
     const defaultChunkDuration = getChunkDuration()
     const languageCode = getLanguageCode()
-    const { filePath: rawInput, mode: parsedMode, modeExplicit, chunkDuration } = parseCLIArgs(
-      Deno.args,
-      defaultChunkDuration,
-    )
+    const {
+      filePath: rawInput,
+      mode: parsedMode,
+      modeExplicit,
+      chunkDuration,
+      extractAudio,
+    } = parseCLIArgs(Deno.args, defaultChunkDuration)
+
+    // --extract-audio mode: download/convert to MP3 and exit
+    if (extractAudio) {
+      const outputDir = Deno.env.get('OUTPUT_DIR') || Deno.cwd()
+
+      if (YouTubeDownloaderService.isYouTubeUrl(rawInput)) {
+        const ytService = new YouTubeDownloaderService()
+
+        console.log('Checking yt-dlp availability...')
+        const availCheck = await ytService.checkAvailability()
+        if (!availCheck.ok) {
+          console.error('Error:', availCheck.error.message)
+          Deno.exit(1)
+        }
+
+        console.log('Downloading audio as MP3 from YouTube...')
+        const downloadResult = await ytService.downloadAudio({
+          url: rawInput,
+          outputDir,
+          format: 'mp3',
+        })
+        if (!downloadResult.ok) {
+          console.error('Error:', downloadResult.error.message)
+          Deno.exit(1)
+        }
+
+        const baseName = downloadResult.data.title || 'youtube-audio'
+        const finalPath = join(outputDir, `${baseName}.mp3`)
+        if (downloadResult.data.filePath !== finalPath) {
+          try {
+            await Deno.rename(downloadResult.data.filePath, finalPath)
+          } catch {
+            console.log(`Audio saved: ${downloadResult.data.filePath}`)
+            return
+          }
+        }
+        console.log(`Audio saved: ${finalPath}`)
+        return
+      }
+
+      // Local file: convert to MP3 via FFmpeg
+      const baseName = parse(rawInput).name
+      const outputPath = join(outputDir, `${baseName}.mp3`)
+
+      console.log(`Extracting audio to MP3...`)
+      const preprocessor = new MediaPreprocessorService()
+      const result = await preprocessor.extractAudioToMp3(rawInput, outputPath)
+      if (!result.ok) {
+        console.error('Error:', result.error.message)
+        Deno.exit(1)
+      }
+
+      console.log(`Audio saved: ${result.data.outputPath}`)
+      return
+    }
 
     let filePath = rawInput
     let mode = parsedMode
@@ -163,7 +251,10 @@ export async function runCLI(): Promise<void> {
 
       console.log('Downloading audio from YouTube...')
       const tempDir = join(Deno.cwd(), 'temp')
-      const downloadResult = await ytService.downloadAudio({ url: rawInput, outputDir: tempDir })
+      const downloadResult = await ytService.downloadAudio({
+        url: rawInput,
+        outputDir: tempDir,
+      })
       if (!downloadResult.ok) {
         console.error('Error:', downloadResult.error.message)
         Deno.exit(1)
@@ -172,7 +263,9 @@ export async function runCLI(): Promise<void> {
       filePath = downloadResult.data.filePath
       downloadedFilePath = filePath
       youtubeTitle = downloadResult.data.title
-      console.log(`Downloaded: "${youtubeTitle}" (${downloadResult.data.durationSec}s)`)
+      console.log(
+        `Downloaded: "${youtubeTitle}" (${downloadResult.data.durationSec}s)`,
+      )
 
       if (!modeExplicit) {
         mode = 'parts'
@@ -193,7 +286,9 @@ export async function runCLI(): Promise<void> {
           event.partialText.length > 80 ? '...' : ''
         }"`
         : ''
-      console.log(`[${event.stage}]${percent}${chunk} ${event.message}${partial}`)
+      console.log(
+        `[${event.stage}]${percent}${chunk} ${event.message}${partial}`,
+      )
     })
     bus.on('log', ({ level, message }) => {
       console.log(`[${level}] ${message}`)
@@ -219,12 +314,21 @@ export async function runCLI(): Promise<void> {
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error)
     console.error('Error:', errorMessage)
-    console.log('Usage: deno run -A main.ts [options] <file-path-or-youtube-url>')
+    console.log(
+      'Usage: deno run -A main.ts [options] <file-path-or-youtube-url>',
+    )
     console.log('Options:')
-    console.log('  --ui                         Run with graphical user interface')
-    console.log('  --mode=whole|parts           Transcription mode (default: whole)')
+    console.log(
+      '  --ui                         Run with graphical user interface',
+    )
+    console.log(
+      '  --mode=whole|parts           Transcription mode (default: whole)',
+    )
     console.log(
       '  --chunk-duration=<seconds>   Chunk duration for parts mode (default: CHUNK_DURATION or 30)',
+    )
+    console.log(
+      '  --extract-audio              Extract audio as MP3 (no transcription)',
     )
     Deno.exit(1)
   } finally {

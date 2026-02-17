@@ -5,7 +5,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Commands
 
 ```bash
-deno task start <file-or-url>    # CLI mode
+deno task start <file-or-url>    # CLI mode — transcribe
+deno task start --extract-audio <file-or-url>  # CLI mode — extract audio as MP3
 deno task start:ui               # UI server at http://localhost:8000
 deno task dev                    # CLI with --watch
 deno task dev:ui                 # UI with --watch
@@ -33,7 +34,7 @@ packages/
   services/
     transcription/       — ElevenLabs API wrapper
     audio-splitter/      — FFmpeg-based chunking for parts mode
-    media-preprocessor/  — MP4 → WAV extraction
+    media-preprocessor/  — MP4 → WAV extraction, audio → MP3 conversion
     media-inspector/     — FFprobe metadata (duration, streams)
     file-service/        — File I/O and directory management
     subtitle-builder/    — Word timestamps → SRT/VTT cues
@@ -61,7 +62,7 @@ Pipeline steps emit events via `EventBus<PipelineEvents>`. CLI subscribes for co
 
 Hono HTTP server with route modules:
 - `routes/jobs.ts` — `POST /api/jobs`, `GET /api/jobs/:id`, `GET /api/jobs/:id/events` (SSE)
-- `routes/files.ts` — `POST /api/files/upload`, `POST /api/files/youtube`
+- `routes/files.ts` — `POST /api/files/upload`, `POST /api/files/youtube`, `POST /api/files/extract-audio`
 - `routes/settings.ts` — Languages, output folder management
 
 Request validation via `@hono/valibot-validator` with schemas in `schemas.ts`.
